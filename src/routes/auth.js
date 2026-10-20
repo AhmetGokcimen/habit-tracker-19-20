@@ -8,6 +8,7 @@ const { validate } = require('../middleware/validate');
 const { limiters } = require('../middleware/rateLimit');
 const { SESSION_COOKIE, requireAuth } = require('../middleware/authenticate');
 const { hashPassword, verifyPassword, createSession, revokeSession } = require('../services/authService');
+const { auditStatement } = require('../services/auditLog');
 const { unauthorized, conflict } = require('../utils/httpError');
 
 const router = express.Router();
@@ -52,6 +53,7 @@ router.post('/register', limiters.register, validate({ body: schemas.register })
 
 router.post(
   '/login',
+  limiters.loginAll,
   limiters.loginIp,
   limiters.loginAccount,
   validate({ body: schemas.login }),
@@ -65,6 +67,11 @@ router.post(
     if (!user || !ok) throw unauthorized('Invalid username or password');
 
     await startSession(res, user);
+    // Admin sign-ins are audited, so use of an admin account is always traceable.
+    if (user.role === 'admin') {
+      const [sql, args] = auditStatement(user, 'admin.login', 'user', user.id, { ip: req.ip });
+      await db.run(sql, args);
+    }
     res.json({ user: publicUser(user) });
   },
 );

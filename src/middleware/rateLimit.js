@@ -77,6 +77,9 @@ const limiters = {
   // Brute force: failed logins per IP, and per targeted account (distributed guessing).
   loginIp: rateLimit({ name: 'login-ip', windowMs: 15 * MINUTE, limit: 10, key: byIp, skipSuccessfulRequests: true }),
   loginAccount: rateLimit({ name: 'login-acct', windowMs: 15 * MINUTE, limit: 10, key: byLoginName, skipSuccessfulRequests: true }),
+  // Every login attempt, successful or not. The demo credentials are public, so
+  // a script with the right password must not be able to mint sessions without limit.
+  loginAll: rateLimit({ name: 'login-all', windowMs: 15 * MINUTE, limit: 30, key: byIp }),
   register: rateLimit({ name: 'register', windowMs: 60 * MINUTE, limit: 20, key: byIp }),
   // A stolen session must not become a way to brute-force the current password.
   passwordChange: rateLimit({ name: 'pw-change', windowMs: 15 * MINUTE, limit: 5, key: byUser, skipSuccessfulRequests: true }),
