@@ -30,7 +30,6 @@ function details(user) {
     { class: 'card account-details' },
     row('Username', `@${user.username}`, 'Shown on habits you share.'),
     row('Email', user.email, 'Private — only you and administrators can see it.'),
-    row('Role', user.role),
     row('Member since', formatDate(user.created_at)),
   );
 }
