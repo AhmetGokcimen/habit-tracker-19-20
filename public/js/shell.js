@@ -1,0 +1,181 @@
+// Shared page shell: session check, top bar, toasts, dialogs, form errors.
+// The top bar hides "Admin" for non-admins purely as UX — the server enforces
+// every permission on its own.
+
+import { api, ApiError, goToLogin } from './api.js';
+import { el, svg, $, $all } from './dom.js';
+import { enableTilt } from './motion.js';
+
+export function brandMark() {
+  // Four tally strokes and the diagonal: the app's logo.
+  return svg(
+    'svg',
+    { attrs: { viewBox: '0 0 32 32', 'aria-hidden': 'true' } },
+    svg('rect', { attrs: { x: 1, y: 1, width: 30, height: 30, rx: 9, fill: '#0f2b2c' } }),
+    ...[8, 13, 18, 23].map((x) =>
+      svg('line', { attrs: { x1: x, y1: 8, x2: x, y2: 24, stroke: '#e6efec', 'stroke-width': 2.6, 'stroke-linecap': 'round' } }),
+    ),
+    svg('line', { attrs: { x1: 5, y1: 21, x2: 26, y2: 11, stroke: '#ff5e3a', 'stroke-width': 3, 'stroke-linecap': 'round' } }),
+  );
+}
+
+const NAV = [
+  { href: '/', label: 'Today', key: 'today' },
+  { href: '/explore.html', label: 'Explore', key: 'explore' },
+  { href: '/admin.html', label: 'Admin', key: 'admin', adminOnly: true },
+];
+
+function renderTopbar(user, active) {
+  const header = $('#topbar');
+  const logout = el('button', { class: 'btn btn-ghost btn-sm', text: 'Log out', attrs: { type: 'button' } });
+  logout.addEventListener('click', async () => {
+    logout.disabled = true;
+    try {
+      await api.post('/api/auth/logout');
+    } finally {
+      location.assign('/login.html');
+    }
+  });
+
+  header.replaceChildren(
+    el(
+      'div',
+      { class: 'topbar-inner' },
+      el('a', { class: 'brand', attrs: { href: '/', 'aria-label': 'Habit Tracker home' } }, brandMark(), 'Habit Tracker'),
+      el(
+        'nav',
+        { class: 'nav', attrs: { 'aria-label': 'Main' } },
+        NAV.filter((item) => !item.adminOnly || user.role === 'admin').map((item) =>
+          el('a', {
+            text: item.label,
+            attrs: { href: item.href, 'aria-current': item.key === active ? 'page' : undefined },
+          }),
+        ),
+      ),
+      el(
+        'div',
+        { class: 'account' },
+        user.role === 'admin' ? el('span', { class: 'role-badge', text: 'admin' }) : null,
+        el('span', { class: 'who', text: `@${user.username}` }),
+        logout,
+      ),
+    ),
+  );
+}
+
+/** Loads the session (redirecting to login if there is none) and draws the shell. */
+export async function initPage({ active } = {}) {
+  let user;
+  try {
+    ({ user } = await api.get('/api/auth/me'));
+  } catch (err) {
+    // No session: go to the login page and stop the page script here.
+    if (err instanceof ApiError && err.status === 401) {
+      goToLogin();
+      return new Promise(() => {});
+    }
+    throw err;
+  }
+  renderTopbar(user, active);
+  ensureToastRegion();
+  enableTilt();
+  return user;
+}
+
+// ---- toasts ---------------------------------------------------------------
+
+function ensureToastRegion() {
+  let region = $('#toasts');
+  if (!region) {
+    region = el('div', { class: 'toasts', attrs: { id: 'toasts', role: 'status', 'aria-live': 'polite' } });
+    document.body.append(region);
+  }
+  return region;
+}
+
+export function toast(message, { error = false } = {}) {
+  const item = el('div', { class: `toast${error ? ' is-error' : ''}`, text: message });
+  ensureToastRegion().append(item);
+  setTimeout(() => {
+    item.classList.add('is-leaving');
+    item.addEventListener('animationend', () => item.remove(), { once: true });
+    setTimeout(() => item.remove(), 400);
+  }, 3200);
+}
+
+export function errorMessage(err) {
+  if (err instanceof ApiError) {
+    if (err.status === 429) return 'Too many attempts. Wait a few minutes and try again.';
+    if (err.status === 403) return 'You don’t have permission to do that.';
+    return err.message;
+  }
+  return 'Could not reach the server. Check your connection and try again.';
+}
+
+// ---- dialogs ----------------------------------------------------------------
+
+export function confirmDialog({ title, message, confirmLabel, danger = true }) {
+  return new Promise((resolve) => {
+    const cancel = el('button', { class: 'btn btn-ghost', text: 'Cancel', attrs: { type: 'button', value: 'cancel' } });
+    const confirm = el('button', {
+      class: `btn ${danger ? 'btn-danger' : 'btn-primary'}`,
+      text: confirmLabel,
+      attrs: { type: 'button', value: 'confirm' },
+    });
+    const dialog = el(
+      'dialog',
+      { class: 'dialog', attrs: { 'aria-labelledby': 'dialog-title' } },
+      el('h2', { text: title, attrs: { id: 'dialog-title' } }),
+      el('p', { class: 'muted', text: message }),
+      el('div', { class: 'dialog-actions' }, cancel, confirm),
+    );
+    const finish = (result) => {
+      dialog.close();
+      dialog.remove();
+      resolve(result);
+    };
+    cancel.addEventListener('click', () => finish(false));
+    confirm.addEventListener('click', () => finish(true));
+    dialog.addEventListener('cancel', () => finish(false));
+    document.body.append(dialog);
+    dialog.showModal();
+    cancel.focus();
+  });
+}
+
+// ---- forms --------------------------------------------------------------------
+
+export function clearFormErrors(form) {
+  for (const field of $all('.field', form)) {
+    field.classList.remove('has-error');
+    $('.field-error', field)?.remove();
+  }
+  $('.form-error', form)?.remove();
+}
+
+/** Shows server-side validation messages next to the matching fields. */
+export function showFormErrors(form, err) {
+  clearFormErrors(form);
+  let placed = false;
+  if (err instanceof ApiError) {
+    for (const { field, message } of err.details) {
+      const container = $(`.field[data-field="${CSS.escape(field)}"]`, form);
+      if (!container) continue;
+      container.classList.add('has-error');
+      container.append(el('p', { class: 'field-error', text: message }));
+      placed = true;
+    }
+  }
+  if (!placed) {
+    form.prepend(el('p', { class: 'form-error', text: errorMessage(err), attrs: { role: 'alert' } }));
+  }
+}
+
+export async function withBusy(button, task) {
+  button.disabled = true;
+  try {
+    return await task();
+  } finally {
+    button.disabled = false;
+  }
+}
