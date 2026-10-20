@@ -1,10 +1,12 @@
 /* "Sprout", the login mascot. Pure SVG built by js/mascot.js — no images.
-   Sprout never looks at your password:
-     is-covering  paws over the eyes (default, and whenever the password is hidden)
-     is-cool      paws down and sunglasses on (while the password is shown)
-   is-oops / is-happy are short reactions to a failed / successful submit. */
+   Two states:
+     .is-covering  paws over the eyes (default, while the password is hidden)
+     no class      paws lowered, eyes open and following the pointer (password shown)
+   .is-oops / .is-happy are short reactions to a failed / successful submit. */
 
 .mascot {
+  --px: 0;
+  --py: 0;
   width: min(280px, 62vw);
   aspect-ratio: 1;
   position: relative;
@@ -28,6 +30,17 @@
   animation: m-sway 5.5s ease-in-out infinite;
 }
 
+.mascot .m-eyes {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  animation: m-blink 6s infinite;
+}
+
+.mascot .m-pupils {
+  transform: translate(calc(var(--px) * 6px), calc(var(--py) * 5px));
+  transition: transform 180ms ease-out;
+}
+
 /* Paws rest at the sides; the transform origin is near the bottom of the paw. */
 .mascot .m-arm {
   transform-box: fill-box;
@@ -35,29 +48,12 @@
   transition: transform 420ms var(--ease-spring);
 }
 
-.mascot .m-glasses {
-  transform: translateY(-26px) scale(0.92);
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
-  opacity: 0;
-  transition:
-    transform 260ms var(--ease-out),
-    opacity 160ms ease;
-}
-
-.mascot .m-glint {
-  transform: translateX(-40px);
-  opacity: 0;
-}
-
 .mascot .m-mouth-o,
-.mascot .m-mouth-grin,
 .mascot .m-mouth-smile {
   transition: opacity 160ms ease;
 }
 
-.mascot .m-mouth-o,
-.mascot .m-mouth-grin {
+.mascot .m-mouth-o {
   opacity: 0;
 }
 
@@ -76,39 +72,6 @@
 }
 
 .mascot.is-covering .m-mouth-o {
-  opacity: 1;
-}
-
-/* Coming back from "cool", the eyes only reappear once the paws are over them. */
-.mascot.is-covering .m-eyes {
-  opacity: 1;
-  transition: opacity 0s linear 420ms;
-}
-
-/* ---- Cool: eyes are hidden instantly, glasses drop on, then the paws lower. */
-.mascot.is-cool .m-eyes {
-  opacity: 0;
-  transition: none;
-}
-
-.mascot.is-cool .m-glasses {
-  transform: translateY(0) scale(1);
-  opacity: 1;
-}
-
-.mascot.is-cool .m-arm {
-  transition-delay: 80ms;
-}
-
-.mascot.is-cool .m-glint {
-  animation: m-glint 1.8s 0.35s ease-in-out infinite;
-}
-
-.mascot.is-cool .m-mouth-smile {
-  opacity: 0;
-}
-
-.mascot.is-cool .m-mouth-grin {
   opacity: 1;
 }
 
@@ -132,18 +95,15 @@
   }
 }
 
-@keyframes m-glint {
-  0% {
-    transform: translateX(-40px);
-    opacity: 0;
-  }
-  30% {
-    opacity: 0.9;
-  }
-  60%,
+@keyframes m-blink {
+  0%,
+  46%,
+  50%,
   100% {
-    transform: translateX(40px);
-    opacity: 0;
+    transform: scaleY(1);
+  }
+  48% {
+    transform: scaleY(0.1);
   }
 }
 
@@ -169,7 +129,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .mascot .m-body-group,
-  .mascot .m-sprout {
+  .mascot .m-sprout,
+  .mascot .m-eyes {
     animation: none !important;
   }
 }

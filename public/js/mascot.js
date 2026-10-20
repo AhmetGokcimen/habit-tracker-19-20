@@ -1,23 +1,20 @@
 // "Sprout" — a small coral habit buddy with a seedling on its head.
 // Built entirely from SVG primitives here (no image files, no third-party art).
-// Visual states are CSS classes (see css/mascot.css); this module only toggles them.
+//
+// Two states only:
+//   is-covering  paws over the eyes (default, password hidden)
+//   (no class)   paws lowered, eyes open and following the pointer (password shown)
+// Visual states are CSS classes (see css/mascot.css); this module toggles them
+// and writes the pointer direction into --px / --py for the pupils.
 
 import { svg } from './dom.js';
 
 const INK = '#0f2b2c';
 
 function buildSvg() {
-  const lensClip = svg(
-    'clipPath',
-    { attrs: { id: 'sprout-lens-clip' } },
-    svg('rect', { attrs: { x: 72, y: 120, width: 44, height: 30, rx: 12 } }),
-    svg('rect', { attrs: { x: 124, y: 120, width: 44, height: 30, rx: 12 } }),
-  );
-
   return svg(
     'svg',
     { attrs: { viewBox: '0 0 240 240', role: 'img', 'aria-label': 'Sprout, the habit buddy' } },
-    svg('defs', {}, lensClip),
     svg('ellipse', { attrs: { cx: 120, cy: 224, rx: 64, ry: 9, fill: 'rgba(0,0,0,0.28)' } }),
     svg(
       'g',
@@ -41,10 +38,10 @@ function buildSvg() {
         svg(
           'g',
           { class: 'm-pupils' },
-          svg('circle', { attrs: { cx: 95, cy: 137, r: 8.5, fill: INK } }),
-          svg('circle', { attrs: { cx: 147, cy: 137, r: 8.5, fill: INK } }),
-          svg('circle', { attrs: { cx: 98, cy: 133, r: 2.6, fill: '#fff' } }),
-          svg('circle', { attrs: { cx: 150, cy: 133, r: 2.6, fill: '#fff' } }),
+          svg('circle', { attrs: { cx: 94, cy: 136, r: 8.5, fill: INK } }),
+          svg('circle', { attrs: { cx: 146, cy: 136, r: 8.5, fill: INK } }),
+          svg('circle', { attrs: { cx: 97, cy: 132, r: 2.6, fill: '#fff' } }),
+          svg('circle', { attrs: { cx: 149, cy: 132, r: 2.6, fill: '#fff' } }),
         ),
       ),
       svg('path', {
@@ -52,25 +49,6 @@ function buildSvg() {
         attrs: { d: 'M108 168 Q120 180 132 168', stroke: INK, 'stroke-width': 4.5, fill: 'none', 'stroke-linecap': 'round' },
       }),
       svg('ellipse', { class: 'm-mouth-o', attrs: { cx: 120, cy: 172, rx: 6.5, ry: 8, fill: INK } }),
-      svg('path', { class: 'm-mouth-grin', attrs: { d: 'M104 165 Q120 188 136 165 Z', fill: INK } }),
-      svg(
-        'g',
-        { class: 'm-glasses' },
-        svg('path', { attrs: { d: 'M72 130 L50 123 M168 130 L190 123', stroke: INK, 'stroke-width': 4, 'stroke-linecap': 'round' } }),
-        svg('rect', { attrs: { x: 72, y: 120, width: 44, height: 30, rx: 12, fill: INK } }),
-        svg('rect', { attrs: { x: 124, y: 120, width: 44, height: 30, rx: 12, fill: INK } }),
-        svg('path', { attrs: { d: 'M116 131 Q120 126 124 131', stroke: INK, 'stroke-width': 4, fill: 'none' } }),
-        svg(
-          'g',
-          { attrs: { 'clip-path': 'url(#sprout-lens-clip)' } },
-          svg(
-            'g',
-            { class: 'm-glint' },
-            svg('rect', { attrs: { x: 86, y: 108, width: 9, height: 56, fill: '#ffc94a', opacity: 0.85, transform: 'rotate(28 90 135)' } }),
-            svg('rect', { attrs: { x: 138, y: 108, width: 9, height: 56, fill: '#ffc94a', opacity: 0.85, transform: 'rotate(28 142 135)' } }),
-          ),
-        ),
-      ),
       paw('m-arm m-arm-left', 52),
       paw('m-arm m-arm-right', 188),
     ),
@@ -97,6 +75,8 @@ export function createMascot(container) {
   container.classList.add('mascot', 'is-covering');
   container.replaceChildren(buildSvg());
 
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   return {
     set(state, on) {
       container.classList.toggle(`is-${state}`, on);
@@ -108,20 +88,27 @@ export function createMascot(container) {
       container.classList.add(`is-${state}`);
       setTimeout(() => container.classList.remove(`is-${state}`), 700);
     },
+    // Points the pupils towards a screen coordinate.
+    lookAt(clientX, clientY) {
+      if (reduced) return;
+      const rect = container.getBoundingClientRect();
+      const dx = clientX - (rect.left + rect.width / 2);
+      const dy = clientY - (rect.top + rect.height * 0.56);
+      const dist = Math.hypot(dx, dy) || 1;
+      const strength = Math.min(1, dist / 260);
+      container.style.setProperty('--px', ((dx / dist) * strength).toFixed(3));
+      container.style.setProperty('--py', ((dy / dist) * strength).toFixed(3));
+    },
   };
 }
 
 /**
  * Wires the mascot to a password field and its show/hide button:
  *  - password hidden (the default) -> paws over the eyes
- *  - password shown                -> paws down, sunglasses on
+ *  - password shown                -> paws lowered, eyes open
  */
 export function bindPasswordMascot(mascot, passwordInput, toggleButton) {
-  const sync = () => {
-    const shown = passwordInput.type === 'text';
-    mascot.set('cool', shown);
-    mascot.set('covering', !shown);
-  };
+  const sync = () => mascot.set('covering', passwordInput.type !== 'text');
 
   toggleButton.addEventListener('click', () => {
     const show = passwordInput.type === 'password';
@@ -132,4 +119,6 @@ export function bindPasswordMascot(mascot, passwordInput, toggleButton) {
     sync();
   });
   sync();
+
+  addEventListener('pointermove', (event) => mascot.lookAt(event.clientX, event.clientY));
 }
