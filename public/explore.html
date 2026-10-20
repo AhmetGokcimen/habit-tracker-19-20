@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Explore · Habit Tracker</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/app.css" />
+    <script type="module" src="/js/pages/explore.js"></script>
+  </head>
+  <body>
+    <header id="topbar" class="topbar"></header>
+    <main id="main" class="page">
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">Shared habits</p>
+          <h1>Explore</h1>
+          <p class="lede">Habits other people chose to share. Find one that fits you, or leave a note of support.</p>
+        </div>
+      </header>
+
+      <form id="search-form" class="search-bar" role="search" novalidate>
+        <label class="visually-hidden" for="q">Search shared habits</label>
+        <input class="input" id="q" name="q" type="search" maxlength="50" placeholder="Search titles and descriptions" autocomplete="off" />
+        <button class="btn btn-primary" type="submit">Search</button>
+      </form>
+      <div id="categories" class="chips" role="group" aria-label="Filter by category"></div>
+
+      <section class="section" aria-labelledby="results-heading">
+        <div class="section-head">
+          <h2 id="results-heading">Results</h2>
+          <span id="result-count" class="mono muted"></span>
+        </div>
+        <div id="results" aria-live="polite"></div>
+        <nav id="pager" class="pager" aria-label="Pages"></nav>
+      </section>
+    </main>
+  </body>
+</html>
