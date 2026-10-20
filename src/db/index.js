@@ -1,45 +1,79 @@
 'use strict';
 
-// Single database handle for the whole app. node:sqlite (built into Node 24)
-// is used instead of a native addon so installation needs no compiler.
-// All queries in this codebase go through db.prepare(...) with `?` placeholders —
-// user input is never concatenated into SQL.
+// Single database client for the whole app (@libsql/client).
+//   local / tests : DATABASE_URL=file:...      (plain SQLite file)
+//   production    : DATABASE_URL=libsql://...  (Turso, hosted SQLite)
+//
+// All queries go through the helpers below with `?` placeholders and an args
+// array — user input is never concatenated into SQL.
 
 const fs = require('node:fs');
 const path = require('node:path');
-const { DatabaseSync } = require('node:sqlite');
+const { createClient } = require('@libsql/client');
 const config = require('../config');
 
-let db;
+let client;
+let ready;
 
-function open(dbPath = config.dbPath) {
-  if (dbPath !== ':memory:') {
-    fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+function getClient() {
+  if (!client) {
+    const { url, authToken, filePath } = config.database;
+    if (filePath) fs.mkdirSync(path.dirname(filePath), { recursive: true });
+    client = createClient({ url, authToken });
   }
-  const handle = new DatabaseSync(dbPath);
-  handle.exec('PRAGMA foreign_keys = ON;');
-  handle.exec('PRAGMA journal_mode = WAL;');
-  handle.exec(fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8'));
-  return handle;
+  return client;
 }
 
-function getDb() {
-  if (!db) db = open(config.isTest ? ':memory:' : config.dbPath);
-  return db;
-}
-
-// Runs fn inside a transaction; rolls back on any thrown error.
-function transaction(fn) {
-  const handle = getDb();
-  handle.exec('BEGIN');
-  try {
-    const result = fn(handle);
-    handle.exec('COMMIT');
-    return result;
-  } catch (err) {
-    handle.exec('ROLLBACK');
-    throw err;
+// Applies schema.sql once per process (every statement is IF NOT EXISTS).
+function init() {
+  if (!ready) {
+    const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
+    ready = getClient()
+      .executeMultiple(`PRAGMA foreign_keys = ON;\n${schema}`)
+      .catch((err) => {
+        ready = undefined;
+        throw err;
+      });
   }
+  return ready;
 }
 
-module.exports = { getDb, transaction };
+// Converts libsql rows to plain objects keyed by column name.
+function toObjects(result) {
+  return result.rows.map((row) => Object.fromEntries(result.columns.map((col, i) => [col, row[i]])));
+}
+
+async function execute(sql, args = []) {
+  await init();
+  return getClient().execute({ sql, args });
+}
+
+async function get(sql, args) {
+  return toObjects(await execute(sql, args))[0];
+}
+
+async function all(sql, args) {
+  return toObjects(await execute(sql, args));
+}
+
+async function run(sql, args) {
+  const result = await execute(sql, args);
+  return {
+    changes: result.rowsAffected,
+    lastInsertRowid: result.lastInsertRowid === undefined ? undefined : Number(result.lastInsertRowid),
+  };
+}
+
+// Executes several statements atomically (all succeed or none do).
+async function batch(statements) {
+  await init();
+  return getClient().batch(statements.map(([sql, args = []]) => ({ sql, args })), 'write');
+}
+
+function close() {
+  if (client) client.close();
+  client = undefined;
+  ready = undefined;
+}
+
+module.exports = { init, get, all, run, batch, close };

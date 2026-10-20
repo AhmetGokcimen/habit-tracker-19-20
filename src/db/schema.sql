@@ -44,7 +44,9 @@ CREATE TABLE IF NOT EXISTS checkins (
   user_id        INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   checkin_date   TEXT    NOT NULL CHECK (checkin_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
   note           TEXT    NOT NULL DEFAULT '' CHECK (length(note) <= 500),
-  photo_filename TEXT,
+  -- Proof photo is stored in the database (Vercel's filesystem is not
+  -- persistent). It is only ever served through an authorized route.
+  photo_data     BLOB    CHECK (photo_data IS NULL OR length(photo_data) <= 1048576),
   photo_mime     TEXT    CHECK (photo_mime IS NULL OR photo_mime IN ('image/jpeg', 'image/png', 'image/webp')),
   created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
   UNIQUE (habit_id, checkin_date)
