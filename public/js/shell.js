@@ -22,6 +22,7 @@ export function brandMark() {
 const NAV = [
   { href: '/', label: 'Today', key: 'today' },
   { href: '/explore.html', label: 'Explore', key: 'explore' },
+  { href: '/profile.html', label: 'Profile', key: 'profile' },
   { href: '/admin.html', label: 'Admin', key: 'admin', adminOnly: true },
 ];
 
@@ -56,7 +57,7 @@ function renderTopbar(user, active) {
         'div',
         { class: 'account' },
         user.role === 'admin' ? el('span', { class: 'role-badge', text: 'admin' }) : null,
-        el('span', { class: 'who', text: `@${user.username}` }),
+        el('a', { class: 'who', text: `@${user.username}`, attrs: { href: '/profile.html' } }),
         logout,
       ),
     ),
