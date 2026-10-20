@@ -94,8 +94,19 @@ const checkinUpdate = z
   .partial()
   .refine((body) => Object.keys(body).length > 0, 'Provide at least one field to update');
 
+// Same free-text rules as check-in notes (F6).
+const commentBody = z.strictObject({
+  body: safeText(500, 'Comment').pipe(z.string().min(1, 'Comment must not be empty')),
+});
+
+const roleUpdate = z.strictObject({
+  role: z.enum(['user', 'admin'], 'Role must be "user" or "admin"'),
+});
+
 module.exports = {
   CATEGORIES,
+  commentBody,
+  roleUpdate,
   register,
   login,
   habitCreate,

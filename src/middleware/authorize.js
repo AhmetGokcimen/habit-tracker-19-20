@@ -56,9 +56,10 @@ const policies = {
     addCheckin: (u, h) => owns(u, h),
     // Check-in history is private data (F5): owner and admins only.
     listCheckins: (u, h) => owns(u, h) || isAdmin(u),
-    // Comments may be read/written on public habits, or by the owner/admin.
+    // Comments are read on public habits (owner/admin can still read them
+    // after the habit is made private), and can only be written on public habits.
     listComments: (u, h) => owns(u, h) || isAdmin(u) || h.is_public === 1,
-    addComment: (u, h) => owns(u, h) || h.is_public === 1,
+    addComment: (u, h) => h.is_public === 1,
   },
   checkin: {
     read: (u, c) => owns(u, c) || isAdmin(u),
@@ -67,8 +68,10 @@ const policies = {
   },
   comment: {
     read: (u, c) => owns(u, c) || isAdmin(u) || c.habit_owner_id === u.id || c.habit_is_public === 1,
+    // Only the author may change what a comment says — not the habit owner, not an admin.
     update: (u, c) => owns(u, c),
-    // Author, the owner of the habit being commented on (moderation), or an admin.
+    // Deletion (moderation): the author, the owner of the habit the comment is
+    // on (so people can remove abuse from their own page), or an admin.
     delete: (u, c) => owns(u, c) || c.habit_owner_id === u.id || isAdmin(u),
   },
   user: {
