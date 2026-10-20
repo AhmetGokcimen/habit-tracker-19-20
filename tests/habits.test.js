@@ -90,6 +90,7 @@ describe('access control on habits (IDOR)', () => {
     const res = await bob.get('/api/habits/mine');
     assert.equal(res.status, 200);
     assert.ok(res.body.habits.every((h) => h.owner.username === 'bob'));
+    assert.ok(res.body.habits.every((h) => Array.isArray(h.recent_checkins)));
   });
 
   test("admin can delete any habit (with its check-ins and comments) but cannot edit it", async () => {

@@ -31,6 +31,7 @@ function serializeHabit(row) {
     ...(row.comment_count !== undefined && { comment_count: row.comment_count }),
     ...(row.checkin_count !== undefined && { checkin_count: row.checkin_count }),
     ...(row.last_checkin !== undefined && { last_checkin: row.last_checkin }),
+    ...(row.recent_dates !== undefined && { recent_checkins: row.recent_dates ? row.recent_dates.split(',').sort() : [] }),
   };
 }
 
@@ -66,7 +67,9 @@ router.get('/mine', async (req, res) => {
   const rows = await db.all(
     `SELECT h.*, u.username AS owner_username,
             (SELECT COUNT(*) FROM checkins c WHERE c.habit_id = h.id) AS checkin_count,
-            (SELECT MAX(checkin_date) FROM checkins c WHERE c.habit_id = h.id) AS last_checkin
+            (SELECT MAX(checkin_date) FROM checkins c WHERE c.habit_id = h.id) AS last_checkin,
+            (SELECT group_concat(checkin_date) FROM checkins c
+              WHERE c.habit_id = h.id AND c.checkin_date >= date('now', '-40 days')) AS recent_dates
        FROM habits h JOIN users u ON u.id = h.user_id
       WHERE h.user_id = ?
       ORDER BY h.created_at DESC, h.id DESC`,
