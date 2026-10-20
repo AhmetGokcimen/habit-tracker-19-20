@@ -86,7 +86,8 @@ describe('admin user management', () => {
     assert.equal((await carol.get('/api/admin/users')).status, 200, 'same session is now admin');
 
     assert.equal((await root.patch(`/api/admin/users/${carolId}/role`).send({ role: 'user' })).status, 200);
-    assert.equal((await carol.get('/api/admin/users')).status, 403, 'and loses it immediately');
+    // Demotion also revokes the demoted user's sessions.
+    assert.equal((await carol.get('/api/admin/users')).status, 401, 'and loses it immediately');
 
     const log = (await root.get('/api/admin/audit-log')).body.entries.filter((e) => e.target_id === carolId);
     assert.deepEqual(log.map((e) => [e.action, e.details.to]), [['user.role_change', 'user'], ['user.role_change', 'admin']]);
@@ -115,7 +116,9 @@ describe('admin user management', () => {
       second.patch(`/api/admin/users/${rootId}/role`).send({ role: 'user' }),
     ]);
     assert.ok(await adminCount() >= 1);
-    assert.ok(results.some((r) => r.status === 409 || r.status === 403), JSON.stringify(results.map((r) => r.status)));
+    // The loser is refused: 409 (last admin), 403 (no longer admin) or 401 (its
+    // session was revoked by the winner's demotion).
+    assert.ok(results.some((r) => [401, 403, 409].includes(r.status)), JSON.stringify(results.map((r) => r.status)));
 
     // The database itself refuses to remove the last admin.
     await assert.rejects(db.run("UPDATE users SET role = 'user' WHERE role = 'admin'"), /last admin/);

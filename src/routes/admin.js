@@ -53,6 +53,8 @@ router.patch('/users/:id/role', authorize('user', 'read'), validate({ body: sche
     await lastAdminGuard(
       db.batch([
         ['UPDATE users SET role = ? WHERE id = ?', [role, target.id]],
+        // A demoted admin is signed out everywhere (e.g. a compromised account).
+        ...(role === 'user' ? [['UPDATE sessions SET revoked = 1 WHERE user_id = ?', [target.id]]] : []),
         auditStatement(req.user, 'user.role_change', 'user', target.id, {
           username: target.username,
           from: target.role,
