@@ -32,9 +32,20 @@ const login = z.strictObject({
   password: z.string().min(1, 'Password is required').max(200),
 });
 
+// Free text shown to users. Output is always escaped by the frontend; in
+// addition, invisible control characters and Unicode bidi overrides (used to
+// visually spoof text) are rejected here.
+const UNSAFE_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F‪-‮⁦-⁩]/;
+const safeText = (max, label) =>
+  z
+    .string()
+    .trim()
+    .max(max, `${label} must be at most ${max} characters`)
+    .refine((s) => !UNSAFE_CHARS.test(s), `${label} contains invalid characters`);
+
 const habitFields = {
-  title: z.string().trim().min(1, 'Title is required').max(100, 'Title must be at most 100 characters'),
-  description: z.string().trim().max(1000, 'Description must be at most 1000 characters'),
+  title: safeText(100, 'Title').pipe(z.string().min(1, 'Title is required')),
+  description: safeText(1000, 'Description'),
   category: z.enum(CATEGORIES, 'Unknown category'),
   is_public: z.boolean(),
 };
@@ -57,4 +68,39 @@ const habitSearch = z.strictObject({
   page: z.coerce.number().int().min(1).max(1000).default(1),
 });
 
-module.exports = { CATEGORIES, register, login, habitCreate, habitUpdate, habitSearch };
+// YYYY-MM-DD, a real calendar day, not before 2000 and not in the future
+// (one day of slack for users in time zones ahead of UTC).
+const checkinDate = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD')
+  .refine((s) => {
+    const d = new Date(`${s}T00:00:00Z`);
+    return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === s;
+  }, 'Not a valid calendar date')
+  .refine((s) => {
+    const tomorrow = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    return s >= '2000-01-01' && s <= tomorrow;
+  }, 'Date must not be in the future');
+
+const checkinNote = safeText(500, 'Note');
+
+const checkinCreate = z.strictObject({
+  checkin_date: checkinDate,
+  note: checkinNote.default(''),
+});
+
+const checkinUpdate = z
+  .strictObject({ checkin_date: checkinDate, note: checkinNote })
+  .partial()
+  .refine((body) => Object.keys(body).length > 0, 'Provide at least one field to update');
+
+module.exports = {
+  CATEGORIES,
+  register,
+  login,
+  habitCreate,
+  habitUpdate,
+  habitSearch,
+  checkinCreate,
+  checkinUpdate,
+};
