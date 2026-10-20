@@ -1,7 +1,7 @@
 {
   "name": "habit-tracker",
   "version": "1.0.0",
-  "description": "Habit Tracker — secure Express + SQLite web app for the 19/20 security challenge",
+  "description": "Habit Tracker - secure Express + SQLite web app for the 19/20 security challenge",
   "main": "src/server.js",
   "private": true,
   "type": "commonjs",
@@ -11,7 +11,7 @@
   "scripts": {
     "start": "node src/server.js",
     "seed": "node scripts/seed.js",
-    "test": "node --test --test-concurrency=1 tests/"
+    "test": "node --test \"tests/**/*.test.js\""
   },
   "dependencies": {
     "bcryptjs": "3.0.3",
