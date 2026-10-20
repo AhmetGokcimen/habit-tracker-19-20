@@ -52,9 +52,8 @@ const isProduction = process.env.NODE_ENV === 'production';
 module.exports = Object.freeze({
   isProduction,
   isTest: process.env.NODE_ENV === 'test',
-  // On Vercel the platform sets x-forwarded-for to the real client IP, so the
-  // first proxy hop is trusted there (needed for per-IP rate limiting).
-  trustProxy: process.env.VERCEL === '1' || process.env.TRUST_PROXY === '1',
+  // On Vercel the client IP comes from platform-set headers (see utils/clientIp.js).
+  onVercel: process.env.VERCEL === '1',
   port: intFromEnv('PORT', 3000, 1, 65535),
   jwtSecret,
   sessionTtlMinutes: intFromEnv('SESSION_TTL_MINUTES', 120, 5, 7 * 24 * 60),

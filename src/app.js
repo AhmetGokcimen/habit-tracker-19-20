@@ -20,7 +20,8 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 function createApp() {
   const app = express();
   app.disable('x-powered-by');
-  app.set('trust proxy', config.trustProxy ? 1 : false);
+  // Client IPs are read explicitly in utils/clientIp.js; never trust forwarding headers here.
+  app.set('trust proxy', false);
 
   // Security headers. The CSP allows scripts and styles only from this origin,
   // so even if markup were injected, inline <script> and on*= handlers would not run.
