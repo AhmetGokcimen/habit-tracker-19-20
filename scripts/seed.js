@@ -7,17 +7,34 @@
 // result. Because this deletes everything, it refuses to touch a remote
 // (Turso) database unless --remote is passed explicitly.
 //
+// Passwords: every run generates a new strong random password per account and
+// prints the list ONCE to the terminal. They are never written to a file or
+// the repository; only their bcrypt hashes are stored.
+//
 //   npm run seed                 # local SQLite file from DATABASE_URL
 //   npm run seed -- --remote     # remote database (destructive!)
 
+const crypto = require('node:crypto');
 const zlib = require('node:zlib');
 const config = require('../src/config');
 const db = require('../src/db');
 const { hashPassword } = require('../src/services/authService');
 const { SEED_ACCOUNTS, SEED_HABITS, CHECKIN_NOTES, SEED_COMMENTS } = require('./seed-data');
 
-const DROP_ORDER = ['comments', 'checkins', 'habits', 'sessions', 'rate_limits', 'admin_audit_log', 'users'];
+const DROP_ORDER = ['comments', 'checkins', 'habits', 'sessions', 'rate_limits', 'rate_limit_windows', 'admin_audit_log', 'users'];
 const PHOTO_EVERY_NTH_HABIT = 4;
+
+// 24 characters from a 58-symbol alphabet without look-alikes (~140 bits).
+const PASSWORD_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789-_';
+const PASSWORD_LENGTH = 24;
+
+function generatePassword() {
+  for (;;) {
+    let pw = '';
+    for (let i = 0; i < PASSWORD_LENGTH; i++) pw += PASSWORD_ALPHABET[crypto.randomInt(PASSWORD_ALPHABET.length)];
+    if (/[A-Za-z]/.test(pw) && /[0-9]/.test(pw)) return pw; // same rule as registration
+  }
+}
 
 // Small deterministic PRNG so every run produces the same dates.
 function mulberry32(seed) {
@@ -90,13 +107,16 @@ async function main() {
 
   // 2. Accounts.
   const userIds = new Map();
+  const credentials = [];
   const statements = [];
   for (const [i, account] of SEED_ACCOUNTS.entries()) {
     const id = i + 1;
+    const password = generatePassword();
+    credentials.push({ role: account.role, username: account.username, password });
     userIds.set(account.username, id);
     statements.push([
       "INSERT INTO users (id, username, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?, datetime('now', '-40 days'))",
-      [id, account.username, account.email, await hashPassword(account.password), account.role],
+      [id, account.username, account.email, await hashPassword(password), account.role],
     ]);
   }
 
@@ -144,9 +164,15 @@ async function main() {
     `Seeded ${SEED_ACCOUNTS.length} accounts (${SEED_ACCOUNTS.length - admins} users, ${admins} admins), ` +
       `${SEED_HABITS.length} habits, ${checkinCount} check-ins (${photoCount} with photos), ${SEED_COMMENTS.length} comments.`,
   );
+  console.log('\nAccount passwords (shown once, not stored anywhere — copy them now):');
+  for (const c of credentials) console.log(`  ${c.role.padEnd(5)}  ${c.username.padEnd(10)}  ${c.password}`);
 }
 
-main().catch((err) => {
-  console.error('Seeding failed:', err.message);
-  process.exit(1);
-});
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('Seeding failed:', err.message);
+    process.exit(1);
+  });
+}
+
+module.exports = { generatePassword };

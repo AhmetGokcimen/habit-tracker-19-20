@@ -1,17 +1,17 @@
 'use strict';
 
 // Single source of truth for the demo data. scripts/seed.js inserts it and
-// scripts/update-readme.js renders SEED_ACCOUNTS into README.md, so the
-// accounts and passwords are written down in exactly one place.
+// scripts/update-readme.js renders SEED_ACCOUNTS into README.md.
 //
-// These are public demo credentials: they appear in the README on purpose.
+// No passwords here: scripts/seed.js generates a random one per account on
+// every run and prints them once. They are shared with the evaluator privately.
 
 const SEED_ACCOUNTS = [
-  { username: 'alice', email: 'alice@example.com', role: 'user', password: 'Alice-Passw0rd!' },
-  { username: 'bob', email: 'bob@example.com', role: 'user', password: 'Bob-Passw0rd!' },
-  { username: 'carol', email: 'carol@example.com', role: 'user', password: 'Carol-Passw0rd!' },
-  { username: 'admin', email: 'admin@example.com', role: 'admin', password: 'Admin-Passw0rd!' },
-  { username: 'moderator', email: 'moderator@example.com', role: 'admin', password: 'Moderator-Passw0rd!' },
+  { username: 'alice', email: 'alice@example.com', role: 'user' },
+  { username: 'bob', email: 'bob@example.com', role: 'user' },
+  { username: 'carol', email: 'carol@example.com', role: 'user' },
+  { username: 'admin', email: 'admin@example.com', role: 'admin' },
+  { username: 'moderator', email: 'moderator@example.com', role: 'admin' },
 ];
 
 // [owner, title, description, category, isPublic, check-ins in the last 30 days]
