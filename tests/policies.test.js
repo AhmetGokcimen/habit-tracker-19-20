@@ -3,7 +3,7 @@
 // Unit tests for the central authorization policy table (src/middleware/authorize.js).
 // HTTP-level IDOR tests live next to each feature's route tests.
 
-require('./helpers');
+require('./helpers'); // sets the test environment before src/ is loaded
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const { can, parseId } = require('../src/middleware/authorize');

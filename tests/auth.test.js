@@ -3,7 +3,7 @@
 const { test, describe, before } = require('node:test');
 const assert = require('node:assert/strict');
 const jwt = require('jsonwebtoken');
-const { request, createApp, getDb, createUser, loginAs, wrap, PASSWORD } = require('./helpers');
+const { request, createApp, db, createUser, loginAs, wrap, PASSWORD } = require('./helpers');
 
 const app = createApp();
 const XRW = ['X-Requested-With', 'fetch'];
@@ -29,7 +29,7 @@ describe('F1 — register / login / logout', () => {
     assert.match(cookie, /HttpOnly/);
     assert.match(cookie, /SameSite=Strict/);
 
-    const row = getDb().prepare('SELECT password_hash FROM users WHERE username = ?').get('alice');
+    const row = await db.get('SELECT password_hash FROM users WHERE username = ?', ['alice']);
     assert.match(row.password_hash, /^\$2[aby]\$\d\d\$/);
     assert.notEqual(row.password_hash, 'Secret123x');
   });
@@ -41,7 +41,7 @@ describe('F1 — register / login / logout', () => {
       .send({ username: 'mallory', email: 'm@example.test', password: 'Secret123x', role: 'admin' });
 
     assert.equal(res.status, 400);
-    assert.equal(getDb().prepare('SELECT 1 FROM users WHERE username = ?').get('mallory'), undefined);
+    assert.equal(await db.get('SELECT 1 FROM users WHERE username = ?', ['mallory']), undefined);
   });
 
   test('register validates input on the server (weak password, bad email, duplicates)', async () => {
@@ -93,7 +93,7 @@ describe('F1 — register / login / logout', () => {
 
 describe('session token hardening', () => {
   test('forged, alg=none and wrongly-signed tokens are rejected', async () => {
-    const id = createUser('victim', 'admin');
+    const id = await createUser('victim', 'admin');
     const none = jwt.sign({ sub: String(id), jti: 'x' }, null, { algorithm: 'none' });
     const wrongKey = jwt.sign({ sub: String(id), jti: 'x', iss: 'habit-tracker' }, 'attacker-key-attacker-key-attacker-key');
 
@@ -104,7 +104,7 @@ describe('session token hardening', () => {
   });
 
   test('a validly signed token without a live session row is rejected', async () => {
-    const id = createUser('ghost');
+    const id = await createUser('ghost');
     const token = jwt.sign({ sub: String(id) }, process.env.JWT_SECRET, {
       algorithm: 'HS256', issuer: 'habit-tracker', jwtid: 'not-in-db', expiresIn: 600,
     });
@@ -115,7 +115,7 @@ describe('session token hardening', () => {
 
 describe('CSRF protection', () => {
   test('state-changing requests without X-Requested-With or from a foreign Origin are refused', async () => {
-    createUser('csrfuser');
+    await createUser('csrfuser');
     const user = await loginAs(app, 'csrfuser');
 
     const noHeader = await user.raw.post('/api/auth/logout');
@@ -129,15 +129,30 @@ describe('CSRF protection', () => {
   });
 });
 
-describe('brute-force protection', () => {
-  test('login is rate limited after repeated failures', async () => {
-    const fresh = wrap(request.agent(createApp()));
+describe('brute-force protection (database-backed)', () => {
+  test('failed logins on one account are limited, even across app instances', async () => {
+    await createUser('target');
     const statuses = [];
     for (let i = 0; i < 12; i++) {
-      const res = await fresh.post('/api/auth/login').send({ username: 'existing', password: `nope-${i}x` });
+      // A fresh app per attempt simulates a new serverless instance / cold start.
+      const res = await wrap(request(createApp())).post('/api/auth/login')
+        .send({ username: 'target', password: `nope-${i}x` });
       statuses.push(res.status);
     }
     assert.equal(statuses[0], 401);
     assert.equal(statuses.at(-1), 429);
+
+    // Even the correct password is refused while the account is throttled.
+    const correct = await wrap(request(app)).post('/api/auth/login').send({ username: 'target', password: PASSWORD });
+    assert.equal(correct.status, 429);
+  });
+
+  test('successful logins do not consume the failed-login budget', async () => {
+    await createUser('frequent');
+    await db.run('DELETE FROM rate_limits'); // the previous test exhausted this IP's budget
+    for (let i = 0; i < 15; i++) {
+      const res = await wrap(request(app)).post('/api/auth/login').send({ username: 'frequent', password: PASSWORD });
+      assert.equal(res.status, 200);
+    }
   });
 });
