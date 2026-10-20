@@ -11,6 +11,8 @@ const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const authRoutes = require('./routes/auth');
 const habitRoutes = require('./routes/habits');
 const checkinRoutes = require('./routes/checkins');
+const commentRoutes = require('./routes/comments');
+const adminRoutes = require('./routes/admin');
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -57,8 +59,11 @@ function createApp() {
   api.use((req, res, next) => (SAFE_METHODS.has(req.method) ? next() : limiters.writes(req, res, next)));
   api.use('/auth', authRoutes);
   api.use('/habits/:id/checkins', checkinRoutes.habitCheckins);
+  api.use('/habits/:id/comments', commentRoutes.habitComments);
   api.use('/habits', habitRoutes);
   api.use('/checkins', checkinRoutes.checkins);
+  api.use('/comments', commentRoutes.comments);
+  api.use('/admin', adminRoutes);
   api.use(notFoundHandler);
   app.use('/api', api);
 
