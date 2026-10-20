@@ -1,0 +1,105 @@
+'use strict';
+
+// Step 2 of every request: "may you do this, on THIS record?"
+//
+// This file is the single place where record-level access rules live.
+// Every route that takes a record id uses:
+//
+//     authorize('habit', 'update')
+//
+// which (1) validates the :id param, (2) loads the record from the database,
+// (3) evaluates the policy below against req.user, and (4) only then hands the
+// record to the route as req.resource. Routes never load records by id
+// themselves, so there is no code path that can skip the ownership check (IDOR).
+//
+// Responses: malformed id or missing record -> 404, policy denied -> 403.
+
+const { getDb } = require('../db');
+const { unauthorized, forbidden, notFound } = require('../utils/httpError');
+
+const ID_PATTERN = /^[1-9][0-9]{0,9}$/;
+
+const isAdmin = (user) => user.role === 'admin';
+const owns = (user, record) => record.user_id === user.id;
+
+// How to load each resource by id. Ownership is always derived from the
+// database row (`user_id`), never from anything in the request.
+const loaders = {
+  habit: (id) => getDb().prepare('SELECT * FROM habits WHERE id = ?').get(id),
+  checkin: (id) =>
+    getDb()
+      .prepare(
+        `SELECT c.*, h.user_id AS habit_owner_id
+           FROM checkins c JOIN habits h ON h.id = c.habit_id
+          WHERE c.id = ?`,
+      )
+      .get(id),
+  comment: (id) =>
+    getDb()
+      .prepare(
+        `SELECT c.*, h.user_id AS habit_owner_id, h.is_public AS habit_is_public
+           FROM comments c JOIN habits h ON h.id = c.habit_id
+          WHERE c.id = ?`,
+      )
+      .get(id),
+  user: (id) => getDb().prepare('SELECT id, username, email, role, created_at FROM users WHERE id = ?').get(id),
+};
+
+// policies[resource][action](user, record) -> boolean
+const policies = {
+  habit: {
+    // Public habits are readable by any logged-in user; private ones only by owner/admin.
+    read: (u, h) => owns(u, h) || isAdmin(u) || h.is_public === 1,
+    update: (u, h) => owns(u, h),
+    delete: (u, h) => owns(u, h) || isAdmin(u),
+    // Check-ins are only ever created by the habit owner on their own habit.
+    addCheckin: (u, h) => owns(u, h),
+    // Check-in history is private data (F5): owner and admins only.
+    listCheckins: (u, h) => owns(u, h) || isAdmin(u),
+    // Comments may be read/written on public habits, or by the owner/admin.
+    listComments: (u, h) => owns(u, h) || isAdmin(u) || h.is_public === 1,
+    addComment: (u, h) => owns(u, h) || h.is_public === 1,
+  },
+  checkin: {
+    read: (u, c) => owns(u, c) || isAdmin(u),
+    update: (u, c) => owns(u, c),
+    delete: (u, c) => owns(u, c) || isAdmin(u),
+  },
+  comment: {
+    read: (u, c) => owns(u, c) || isAdmin(u) || c.habit_owner_id === u.id || c.habit_is_public === 1,
+    update: (u, c) => owns(u, c),
+    // Author, the owner of the habit being commented on (moderation), or an admin.
+    delete: (u, c) => owns(u, c) || c.habit_owner_id === u.id || isAdmin(u),
+  },
+  user: {
+    read: (u, target) => u.id === target.id || isAdmin(u),
+  },
+};
+
+function can(user, resource, action, record) {
+  const rule = policies[resource]?.[action];
+  if (!rule) throw new Error(`No policy defined for ${resource}.${action}`);
+  return Boolean(user && record && rule(user, record));
+}
+
+function parseId(raw) {
+  return typeof raw === 'string' && ID_PATTERN.test(raw) ? Number(raw) : null;
+}
+
+function authorize(resource, action, { param = 'id' } = {}) {
+  if (!loaders[resource] || !policies[resource]?.[action]) {
+    throw new Error(`authorize(): unknown ${resource}.${action}`);
+  }
+  return (req, _res, next) => {
+    if (!req.user) return next(unauthorized());
+    const id = parseId(req.params[param]);
+    if (id === null) return next(notFound());
+    const record = loaders[resource](id);
+    if (!record) return next(notFound());
+    if (!can(req.user, resource, action, record)) return next(forbidden());
+    req.resource = record;
+    next();
+  };
+}
+
+module.exports = { authorize, can, parseId, policies };
