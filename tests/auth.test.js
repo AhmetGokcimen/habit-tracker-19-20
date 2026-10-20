@@ -149,7 +149,7 @@ describe('brute-force protection (database-backed)', () => {
 
   test('successful logins do not consume the failed-login budget', async () => {
     await createUser('frequent');
-    await db.run('DELETE FROM rate_limits'); // the previous test exhausted this IP's budget
+    await db.run('DELETE FROM rate_limit_windows'); // the previous test exhausted this IP's budget
     for (let i = 0; i < 15; i++) {
       const res = await wrap(request(app)).post('/api/auth/login').send({ username: 'frequent', password: PASSWORD });
       assert.equal(res.status, 200);

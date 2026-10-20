@@ -17,7 +17,7 @@ const auditCount = async () => (await db.get('SELECT COUNT(*) AS n FROM admin_au
 const lastAudit = () => db.get('SELECT * FROM admin_audit_log ORDER BY id DESC LIMIT 1');
 
 // Many logins happen in this file; start each test with fresh rate-limit counters.
-beforeEach(() => db.run('DELETE FROM rate_limits'));
+beforeEach(() => db.run('DELETE FROM rate_limit_windows'));
 
 describe('known admin credentials grant nothing beyond F2', async () => {
   ids.admin = await createUser('admin', 'admin');

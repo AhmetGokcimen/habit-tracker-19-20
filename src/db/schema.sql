@@ -6,7 +6,9 @@
 CREATE TABLE IF NOT EXISTS users (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   username      TEXT    NOT NULL UNIQUE COLLATE NOCASE,
-  email         TEXT    NOT NULL UNIQUE COLLATE NOCASE,
+  -- Not unique on purpose: login is by username, and a unique email would let
+  -- the register endpoint reveal whether an address has an account.
+  email         TEXT    NOT NULL COLLATE NOCASE,
   password_hash TEXT    NOT NULL,
   role          TEXT    NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
   created_at    TEXT    NOT NULL DEFAULT (datetime('now'))
@@ -23,11 +25,13 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
--- Fixed-window rate-limit counters, shared by every serverless instance.
-CREATE TABLE IF NOT EXISTS rate_limits (
+-- Sliding-window rate-limit counters (current + previous window), shared by
+-- every serverless instance. See src/middleware/rateLimit.js.
+CREATE TABLE IF NOT EXISTS rate_limit_windows (
   bucket       TEXT    PRIMARY KEY,
   window_start INTEGER NOT NULL,
-  hits         INTEGER NOT NULL
+  hits         INTEGER NOT NULL,
+  prev_hits    INTEGER NOT NULL DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS habits (

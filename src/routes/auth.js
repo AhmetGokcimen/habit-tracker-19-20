@@ -9,6 +9,7 @@ const { limiters } = require('../middleware/rateLimit');
 const { SESSION_COOKIE, requireAuth } = require('../middleware/authenticate');
 const { hashPassword, verifyPassword, createSession, revokeSession } = require('../services/authService');
 const { auditStatement } = require('../services/auditLog');
+const { clientIp } = require('../utils/clientIp');
 const { unauthorized, conflict } = require('../utils/httpError');
 
 const router = express.Router();
@@ -29,8 +30,10 @@ const publicUser = (u) => ({ id: u.id, username: u.username, role: u.role });
 
 router.post('/register', limiters.register, validate({ body: schemas.register }), async (req, res) => {
   const { username, email, password } = req.valid.body;
-  const taken = await db.get('SELECT 1 FROM users WHERE username = ? OR email = ?', [username, email]);
-  if (taken) throw conflict('Username or email is already registered');
+  // Only the username is checked: usernames are public anyway, while emails are
+  // private and must not be confirmable through this endpoint.
+  const taken = await db.get('SELECT 1 FROM users WHERE username = ?', [username]);
+  if (taken) throw conflict('That username is taken');
 
   const hash = await hashPassword(password);
   let lastInsertRowid;
@@ -42,7 +45,7 @@ router.post('/register', limiters.register, validate({ body: schemas.register })
     ));
   } catch (err) {
     // Two concurrent registrations for the same name: the UNIQUE constraint decides.
-    if (/UNIQUE/.test(err.message)) throw conflict('Username or email is already registered');
+    if (/UNIQUE/.test(err.message)) throw conflict('That username is taken');
     throw err;
   }
 
@@ -55,7 +58,8 @@ router.post(
   '/login',
   limiters.loginAll,
   limiters.loginIp,
-  limiters.loginAccount,
+  limiters.loginAccountIp,
+  limiters.loginAccountDaily,
   validate({ body: schemas.login }),
   async (req, res) => {
     const { username, password } = req.valid.body;
@@ -69,7 +73,7 @@ router.post(
     await startSession(res, user);
     // Admin sign-ins are audited, so use of an admin account is always traceable.
     if (user.role === 'admin') {
-      const [sql, args] = auditStatement(user, 'admin.login', 'user', user.id, { ip: req.ip });
+      const [sql, args] = auditStatement(user, 'admin.login', 'user', user.id, { ip: clientIp(req) });
       await db.run(sql, args);
     }
     res.json({ user: publicUser(user) });
