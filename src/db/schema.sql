@@ -60,6 +60,23 @@ CREATE TABLE IF NOT EXISTS checkins (
 );
 CREATE INDEX IF NOT EXISTS idx_checkins_habit ON checkins(habit_id);
 
+-- A check-in always belongs to the owner of its habit. Enforced by the
+-- database too, so even an application bug cannot attach a check-in to
+-- someone else's habit, or move one between habits/users afterwards.
+CREATE TRIGGER IF NOT EXISTS checkins_owner_must_match
+BEFORE INSERT ON checkins
+WHEN NEW.user_id IS NOT (SELECT user_id FROM habits WHERE id = NEW.habit_id)
+BEGIN
+  SELECT RAISE(ABORT, 'checkin owner must match habit owner');
+END;
+
+CREATE TRIGGER IF NOT EXISTS checkins_owner_immutable
+BEFORE UPDATE OF habit_id, user_id ON checkins
+WHEN NEW.habit_id IS NOT OLD.habit_id OR NEW.user_id IS NOT OLD.user_id
+BEGIN
+  SELECT RAISE(ABORT, 'checkin owner and habit are immutable');
+END;
+
 CREATE TABLE IF NOT EXISTS comments (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   habit_id   INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
