@@ -23,6 +23,13 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_user ON sessions(user_id);
 
+-- Fixed-window rate-limit counters, shared by every serverless instance.
+CREATE TABLE IF NOT EXISTS rate_limits (
+  bucket       TEXT    PRIMARY KEY,
+  window_start INTEGER NOT NULL,
+  hits         INTEGER NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS habits (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
