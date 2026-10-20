@@ -99,6 +99,16 @@ const commentBody = z.strictObject({
   body: safeText(500, 'Comment').pipe(z.string().min(1, 'Comment must not be empty')),
 });
 
+const passwordChange = z
+  .strictObject({
+    current_password: z.string().min(1, 'Enter your current password').max(200),
+    new_password: password,
+  })
+  .refine((b) => b.current_password !== b.new_password, {
+    message: 'New password must be different from the current one',
+    path: ['new_password'],
+  });
+
 const roleUpdate = z.strictObject({
   role: z.enum(['user', 'admin'], 'Role must be "user" or "admin"'),
 });
@@ -106,6 +116,7 @@ const roleUpdate = z.strictObject({
 module.exports = {
   CATEGORIES,
   commentBody,
+  passwordChange,
   roleUpdate,
   register,
   login,

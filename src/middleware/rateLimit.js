@@ -78,6 +78,8 @@ const limiters = {
   loginIp: rateLimit({ name: 'login-ip', windowMs: 15 * MINUTE, limit: 10, key: byIp, skipSuccessfulRequests: true }),
   loginAccount: rateLimit({ name: 'login-acct', windowMs: 15 * MINUTE, limit: 10, key: byLoginName, skipSuccessfulRequests: true }),
   register: rateLimit({ name: 'register', windowMs: 60 * MINUTE, limit: 20, key: byIp }),
+  // A stolen session must not become a way to brute-force the current password.
+  passwordChange: rateLimit({ name: 'pw-change', windowMs: 15 * MINUTE, limit: 5, key: byUser, skipSuccessfulRequests: true }),
   // Spam / abuse: all state-changing API calls per user (or per IP if anonymous).
   writes: rateLimit({ name: 'writes', windowMs: 10 * MINUTE, limit: 200, key: byUser }),
 };
