@@ -19,8 +19,8 @@ function errorHandler(err, _req, res, _next) {
   }
 
   if (err instanceof multer.MulterError) {
-    const message = err.code === 'LIMIT_FILE_SIZE' ? 'File too large' : 'Invalid upload';
-    return res.status(err.code === 'LIMIT_FILE_SIZE' ? 413 : 400).json({ error: message });
+    const tooLarge = err.code === 'LIMIT_FILE_SIZE';
+    return res.status(tooLarge ? 413 : 400).json({ error: tooLarge ? 'File too large' : 'Invalid upload' });
   }
 
   // body-parser errors (malformed JSON, payload too large, ...)

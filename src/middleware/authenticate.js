@@ -13,8 +13,8 @@ const { unauthorized, forbidden } = require('../utils/httpError');
 
 const SESSION_COOKIE = 'session';
 
-function authenticate(req, _res, next) {
-  const session = resolveSession(req.cookies?.[SESSION_COOKIE]);
+async function authenticate(req, _res, next) {
+  const session = await resolveSession(req.cookies?.[SESSION_COOKIE]);
   if (session) {
     req.user = session.user;
     req.sessionJti = session.jti;

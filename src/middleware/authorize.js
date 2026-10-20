@@ -14,7 +14,7 @@
 //
 // Responses: malformed id or missing record -> 404, policy denied -> 403.
 
-const { getDb } = require('../db');
+const db = require('../db');
 const { unauthorized, forbidden, notFound } = require('../utils/httpError');
 
 const ID_PATTERN = /^[1-9][0-9]{0,9}$/;
@@ -24,25 +24,25 @@ const owns = (user, record) => record.user_id === user.id;
 
 // How to load each resource by id. Ownership is always derived from the
 // database row (`user_id`), never from anything in the request.
+// Photo bytes are deliberately not loaded here.
 const loaders = {
-  habit: (id) => getDb().prepare('SELECT * FROM habits WHERE id = ?').get(id),
+  habit: (id) => db.get('SELECT * FROM habits WHERE id = ?', [id]),
   checkin: (id) =>
-    getDb()
-      .prepare(
-        `SELECT c.*, h.user_id AS habit_owner_id
-           FROM checkins c JOIN habits h ON h.id = c.habit_id
-          WHERE c.id = ?`,
-      )
-      .get(id),
+    db.get(
+      `SELECT c.id, c.habit_id, c.user_id, c.checkin_date, c.note, c.photo_mime, c.created_at,
+              h.user_id AS habit_owner_id
+         FROM checkins c JOIN habits h ON h.id = c.habit_id
+        WHERE c.id = ?`,
+      [id],
+    ),
   comment: (id) =>
-    getDb()
-      .prepare(
-        `SELECT c.*, h.user_id AS habit_owner_id, h.is_public AS habit_is_public
-           FROM comments c JOIN habits h ON h.id = c.habit_id
-          WHERE c.id = ?`,
-      )
-      .get(id),
-  user: (id) => getDb().prepare('SELECT id, username, email, role, created_at FROM users WHERE id = ?').get(id),
+    db.get(
+      `SELECT c.*, h.user_id AS habit_owner_id, h.is_public AS habit_is_public
+         FROM comments c JOIN habits h ON h.id = c.habit_id
+        WHERE c.id = ?`,
+      [id],
+    ),
+  user: (id) => db.get('SELECT id, username, email, role, created_at FROM users WHERE id = ?', [id]),
 };
 
 // policies[resource][action](user, record) -> boolean
@@ -90,11 +90,11 @@ function authorize(resource, action, { param = 'id' } = {}) {
   if (!loaders[resource] || !policies[resource]?.[action]) {
     throw new Error(`authorize(): unknown ${resource}.${action}`);
   }
-  return (req, _res, next) => {
+  return async (req, _res, next) => {
     if (!req.user) return next(unauthorized());
     const id = parseId(req.params[param]);
     if (id === null) return next(notFound());
-    const record = loaders[resource](id);
+    const record = await loaders[resource](id);
     if (!record) return next(notFound());
     if (!can(req.user, resource, action, record)) return next(forbidden());
     req.resource = record;

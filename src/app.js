@@ -6,13 +6,16 @@ const cookieParser = require('cookie-parser');
 const config = require('./config');
 const { authenticate } = require('./middleware/authenticate');
 const { csrfProtection } = require('./middleware/csrf');
-const { createAuthLimiters } = require('./middleware/rateLimit');
+const { limiters } = require('./middleware/rateLimit');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
-const { authRouter } = require('./routes/auth');
+const authRoutes = require('./routes/auth');
+
+const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
 function createApp() {
   const app = express();
   app.disable('x-powered-by');
+  app.set('trust proxy', config.trustProxy ? 1 : false);
 
   // Security headers. The CSP allows scripts and styles only from this origin,
   // so even if markup were injected, inline <script> and on*= handlers would not run.
@@ -44,12 +47,13 @@ function createApp() {
   app.use(authenticate);
 
   const api = express.Router();
-  api.use((_req, res, next) => {
+  api.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
     next();
   });
   api.use(csrfProtection);
-  api.use('/auth', authRouter(createAuthLimiters()));
+  api.use((req, res, next) => (SAFE_METHODS.has(req.method) ? next() : limiters.writes(req, res, next)));
+  api.use('/auth', authRoutes);
   api.use(notFoundHandler);
   app.use('/api', api);
 
