@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+
+# Secrets — never commit real environment files
+.env
+.env.*
+!.env.example
+
+# Databases
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+data/
+
+# User uploads
+uploads/
+
+# Logs / coverage / OS
+*.log
+npm-debug.log*
+coverage/
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
