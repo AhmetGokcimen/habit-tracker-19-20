@@ -69,10 +69,16 @@ function createApp() {
   api.use(notFoundHandler);
   app.use('/api', api);
 
+  // Local static files. On Vercel, public/ is served by the CDN instead and
+  // gets the same security headers from vercel.json.
   app.use(express.static(config.publicDir, { extensions: ['html'], index: 'index.html' }));
   app.use(notFoundHandler);
   app.use(errorHandler);
   return app;
 }
 
-module.exports = { createApp };
+// Vercel uses this file as the function entry point and expects the app as the
+// module's default export. createApp stays available for tests and server.js.
+const app = createApp();
+module.exports = app;
+module.exports.createApp = createApp;
