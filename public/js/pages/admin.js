@@ -112,6 +112,8 @@ function usersTable(users) {
 function describe(entry) {
   const d = entry.details || {};
   switch (entry.action) {
+    case 'admin.login':
+      return `@${entry.actor_username} signed in`;
     case 'user.role_change':
       return `@${entry.actor_username} changed @${d.username}'s role from ${d.from} to ${d.to}`;
     case 'user.delete':
