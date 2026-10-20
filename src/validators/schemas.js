@@ -32,4 +32,29 @@ const login = z.strictObject({
   password: z.string().min(1, 'Password is required').max(200),
 });
 
-module.exports = { CATEGORIES, register, login };
+const habitFields = {
+  title: z.string().trim().min(1, 'Title is required').max(100, 'Title must be at most 100 characters'),
+  description: z.string().trim().max(1000, 'Description must be at most 1000 characters'),
+  category: z.enum(CATEGORIES, 'Unknown category'),
+  is_public: z.boolean(),
+};
+
+const habitCreate = z.strictObject({
+  ...habitFields,
+  description: habitFields.description.default(''),
+  is_public: habitFields.is_public.default(false),
+});
+
+const habitUpdate = z
+  .strictObject(habitFields)
+  .partial()
+  .refine((body) => Object.keys(body).length > 0, 'Provide at least one field to update');
+
+// Query strings: repeated keys (?q=a&q=b) arrive as arrays and fail z.string().
+const habitSearch = z.strictObject({
+  q: z.string().trim().max(50, 'Search text must be at most 50 characters').optional(),
+  category: z.enum(CATEGORIES, 'Unknown category').optional(),
+  page: z.coerce.number().int().min(1).max(1000).default(1),
+});
+
+module.exports = { CATEGORIES, register, login, habitCreate, habitUpdate, habitSearch };
