@@ -64,6 +64,36 @@ describe('spoofed forwarding headers cannot rotate the client IP', () => {
   });
 });
 
+describe('CF-Connecting-IP is trusted only on requests that really come from Cloudflare', () => {
+  const viaVercel = (peer, cf) => ({ headers: { 'x-vercel-forwarded-for': peer, ...(cf ? { 'cf-connecting-ip': cf } : {}) }, socket: { remoteAddress: '10.0.0.1' } });
+  const direct = (peer, cf) => ({ headers: cf ? { 'cf-connecting-ip': cf } : {}, socket: { remoteAddress: peer } });
+
+  test('through Cloudflare (edge IP connects to Vercel): the visitor in CF-Connecting-IP is used', () => {
+    assert.equal(clientIp(viaVercel('172.64.12.34', '203.0.113.9'), { onVercel: true }), '203.0.113.9');
+    assert.equal(clientIp(viaVercel('2606:4700:10::ac43:1', '203.0.113.9'), { onVercel: true }), '203.0.113.9');
+    assert.equal(clientIp(viaVercel('104.16.0.1', '2001:db8:1:2:3:4:5:6'), { onVercel: true }), '2001:db8:1:2::/64');
+  });
+
+  test('straight to vercel.app with a forged CF-Connecting-IP: the header is ignored', () => {
+    assert.equal(clientIp(viaVercel('198.51.100.7', '1.2.3.4'), { onVercel: true }), '198.51.100.7');
+    assert.equal(clientIp(viaVercel('8.8.8.8', '104.16.0.1'), { onVercel: true }), '8.8.8.8');
+    assert.equal(clientIp(direct('127.0.0.1', '9.9.9.9'), { onVercel: false }), '127.0.0.1');
+  });
+
+  test('a Cloudflare peer with a missing or malformed CF-Connecting-IP falls back to the peer', () => {
+    assert.equal(clientIp(viaVercel('172.64.12.34'), { onVercel: true }), '172.64.12.34');
+    assert.equal(clientIp(viaVercel('172.64.12.34', 'not-an-ip'), { onVercel: true }), '172.64.12.34');
+  });
+
+  test('failed logins with a rotating forged CF-Connecting-IP are still limited per real IP', async () => {
+    const statuses = [];
+    for (let i = 0; i < 12; i++) {
+      statuses.push((await login(`cfspoof${i}`, 'wrong-pass-1', { 'CF-Connecting-IP': `198.51.100.${i + 1}` })).status);
+    }
+    assert.deepEqual(statuses.slice(10), [429, 429]);
+  });
+});
+
 describe('per-account limits', () => {
   test('5 failed logins on one account from one IP lock that account for that IP — even the right password', async () => {
     await createUser('target');
