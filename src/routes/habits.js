@@ -10,6 +10,7 @@ const schemas = require('../validators/schemas');
 const { validate } = require('../middleware/validate');
 const { requireAuth } = require('../middleware/authenticate');
 const { authorize } = require('../middleware/authorize');
+const { moderationAudit } = require('../services/auditLog');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -111,9 +112,10 @@ router.patch('/:id', authorize('habit', 'update'), validate({ body: schemas.habi
 });
 
 router.delete('/:id', authorize('habit', 'delete'), async (req, res) => {
-  const id = req.resource.id;
+  const { id, user_id, title } = req.resource;
   // Explicit, atomic cascade (does not depend on the foreign_keys pragma).
   await db.batch([
+    ...moderationAudit(req.user, user_id, 'habit.delete', 'habit', id, { owner_id: user_id, title }),
     ['DELETE FROM comments WHERE habit_id = ?', [id]],
     ['DELETE FROM checkins WHERE habit_id = ?', [id]],
     ['DELETE FROM habits WHERE id = ?', [id]],

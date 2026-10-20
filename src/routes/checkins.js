@@ -13,6 +13,7 @@ const { validate } = require('../middleware/validate');
 const { requireAuth } = require('../middleware/authenticate');
 const { authorize } = require('../middleware/authorize');
 const { photoUpload, EXTENSIONS } = require('../middleware/upload');
+const { moderationAudit } = require('../services/auditLog');
 const { conflict, notFound } = require('../utils/httpError');
 
 const SELECT_CHECKIN = `SELECT id, habit_id, user_id, checkin_date, note, created_at,
@@ -100,7 +101,11 @@ checkins.patch('/:id', authorize('checkin', 'update'), validate({ body: schemas.
 });
 
 checkins.delete('/:id', authorize('checkin', 'delete'), async (req, res) => {
-  await db.run('DELETE FROM checkins WHERE id = ?', [req.resource.id]);
+  const c = req.resource;
+  await db.batch([
+    ...moderationAudit(req.user, c.user_id, 'checkin.delete', 'checkin', c.id, { owner_id: c.user_id, habit_id: c.habit_id }),
+    ['DELETE FROM checkins WHERE id = ?', [c.id]],
+  ]);
   res.status(204).end();
 });
 
