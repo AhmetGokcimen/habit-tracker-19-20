@@ -82,6 +82,49 @@ CREATE TABLE IF NOT EXISTS comments (
   habit_id   INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
   user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   body       TEXT    NOT NULL CHECK (length(body) BETWEEN 1 AND 500),
-  created_at TEXT    NOT NULL DEFAULT (datetime('now'))
+  created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+  updated_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_comments_habit ON comments(habit_id);
+
+-- The system can never be left without an administrator. Writes are
+-- serialized by SQLite, so this also holds when two admins act concurrently.
+CREATE TRIGGER IF NOT EXISTS users_keep_last_admin_on_update
+BEFORE UPDATE OF role ON users
+WHEN OLD.role = 'admin' AND NEW.role <> 'admin'
+ AND (SELECT COUNT(*) FROM users WHERE role = 'admin') <= 1
+BEGIN
+  SELECT RAISE(ABORT, 'cannot remove the last admin');
+END;
+
+CREATE TRIGGER IF NOT EXISTS users_keep_last_admin_on_delete
+BEFORE DELETE ON users
+WHEN OLD.role = 'admin' AND (SELECT COUNT(*) FROM users WHERE role = 'admin') <= 1
+BEGIN
+  SELECT RAISE(ABORT, 'cannot remove the last admin');
+END;
+
+-- Append-only audit trail of administrator actions. No foreign keys, so
+-- entries survive the deletion of the users they mention.
+CREATE TABLE IF NOT EXISTS admin_audit_log (
+  id             INTEGER PRIMARY KEY AUTOINCREMENT,
+  actor_id       INTEGER NOT NULL,
+  actor_username TEXT    NOT NULL,
+  action         TEXT    NOT NULL,
+  target_type    TEXT    NOT NULL,
+  target_id      INTEGER NOT NULL,
+  details        TEXT    NOT NULL DEFAULT '{}',
+  created_at     TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TRIGGER IF NOT EXISTS admin_audit_log_no_update
+BEFORE UPDATE ON admin_audit_log
+BEGIN
+  SELECT RAISE(ABORT, 'audit log is append-only');
+END;
+
+CREATE TRIGGER IF NOT EXISTS admin_audit_log_no_delete
+BEFORE DELETE ON admin_audit_log
+BEGIN
+  SELECT RAISE(ABORT, 'audit log is append-only');
+END;
