@@ -1,7 +1,6 @@
 // "Sprout" — a small coral habit buddy with a seedling on its head.
 // Built entirely from SVG primitives here (no image files, no third-party art).
-// Visual states are CSS classes (see css/mascot.css); this module only toggles
-// them and feeds the pointer position into --px / --py for the pupils.
+// Visual states are CSS classes (see css/mascot.css); this module only toggles them.
 
 import { svg } from './dom.js';
 
@@ -79,24 +78,24 @@ function buildSvg() {
 }
 
 // A mitten-shaped paw: lighter than the body with an outline and finger
-// creases, so it reads clearly when it covers the eyes.
+// creases. Large enough (20x26) to fully hide an eye (16x18) when centred on it.
 function paw(className, cx) {
   const crease = { stroke: '#c9381a', 'stroke-width': 2.5, 'stroke-linecap': 'round', fill: 'none' };
   return svg(
     'g',
     { class: className },
-    svg('ellipse', { attrs: { cx, cy: 184, rx: 18, ry: 25, fill: '#ff8a6b', stroke: '#c9381a', 'stroke-width': 3 } }),
-    svg('path', { attrs: { d: `M${cx - 7} 166 L${cx - 7} 176`, ...crease } }),
-    svg('path', { attrs: { d: `M${cx} 164 L${cx} 175`, ...crease } }),
-    svg('path', { attrs: { d: `M${cx + 7} 166 L${cx + 7} 176`, ...crease } }),
+    svg('ellipse', { attrs: { cx, cy: 184, rx: 20, ry: 26, fill: '#ff8a6b', stroke: '#c9381a', 'stroke-width': 3 } }),
+    svg('path', { attrs: { d: `M${cx - 8} 166 L${cx - 8} 177`, ...crease } }),
+    svg('path', { attrs: { d: `M${cx} 163 L${cx} 175`, ...crease } }),
+    svg('path', { attrs: { d: `M${cx + 8} 166 L${cx + 8} 177`, ...crease } }),
   );
 }
 
 export function createMascot(container) {
-  container.classList.add('mascot');
+  // Start with the paws already over the eyes (class set before the SVG is
+  // inserted, so there is no opening animation that would reveal the eyes).
+  container.classList.add('mascot', 'is-covering');
   container.replaceChildren(buildSvg());
-
-  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   return {
     set(state, on) {
@@ -109,31 +108,19 @@ export function createMascot(container) {
       container.classList.add(`is-${state}`);
       setTimeout(() => container.classList.remove(`is-${state}`), 700);
     },
-    // Points the pupils at a screen coordinate.
-    lookAt(clientX, clientY) {
-      if (reduced) return;
-      const rect = container.getBoundingClientRect();
-      const dx = clientX - (rect.left + rect.width / 2);
-      const dy = clientY - (rect.top + rect.height * 0.55);
-      const dist = Math.hypot(dx, dy) || 1;
-      const strength = Math.min(1, dist / 260);
-      container.style.setProperty('--px', ((dx / dist) * strength).toFixed(3));
-      container.style.setProperty('--py', ((dy / dist) * strength).toFixed(3));
-    },
   };
 }
 
 /**
  * Wires the mascot to a password field and its show/hide button:
- *  - password hidden and focused or filled -> hands over the eyes
- *  - password shown                       -> sunglasses on
+ *  - password hidden (the default) -> paws over the eyes
+ *  - password shown                -> paws down, sunglasses on
  */
 export function bindPasswordMascot(mascot, passwordInput, toggleButton) {
   const sync = () => {
     const shown = passwordInput.type === 'text';
-    const active = document.activeElement === passwordInput || passwordInput.value.length > 0;
     mascot.set('cool', shown);
-    mascot.set('covering', !shown && active);
+    mascot.set('covering', !shown);
   };
 
   toggleButton.addEventListener('click', () => {
@@ -144,8 +131,5 @@ export function bindPasswordMascot(mascot, passwordInput, toggleButton) {
     toggleButton.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
     sync();
   });
-  for (const event of ['focus', 'blur', 'input']) passwordInput.addEventListener(event, sync);
   sync();
-
-  addEventListener('pointermove', (e) => mascot.lookAt(e.clientX, e.clientY));
 }

@@ -1,10 +1,10 @@
 /* "Sprout", the login mascot. Pure SVG built by js/mascot.js — no images.
-   States are classes on .mascot: is-covering (hands over eyes while the
-   password is hidden), is-cool (sunglasses while it is shown), is-oops, is-happy. */
+   Sprout never looks at your password:
+     is-covering  paws over the eyes (default, and whenever the password is hidden)
+     is-cool      paws down and sunglasses on (while the password is shown)
+   is-oops / is-happy are short reactions to a failed / successful submit. */
 
 .mascot {
-  --px: 0;
-  --py: 0;
   width: min(280px, 62vw);
   aspect-ratio: 1;
   position: relative;
@@ -28,17 +28,7 @@
   animation: m-sway 5.5s ease-in-out infinite;
 }
 
-.mascot .m-pupils {
-  transform: translate(calc(var(--px) * 6px), calc(var(--py) * 5px));
-  transition: transform 180ms ease-out;
-}
-
-.mascot .m-eyes {
-  transform-box: fill-box;
-  transform-origin: 50% 50%;
-  animation: m-blink 6s infinite;
-}
-
+/* Paws rest at the sides; the transform origin is near the bottom of the paw. */
 .mascot .m-arm {
   transform-box: fill-box;
   transform-origin: 50% 80%;
@@ -46,13 +36,13 @@
 }
 
 .mascot .m-glasses {
-  transform: translateY(-120px) rotate(-12deg);
+  transform: translateY(-26px) scale(0.92);
   transform-box: fill-box;
   transform-origin: 50% 50%;
   opacity: 0;
   transition:
-    transform 520ms var(--ease-spring),
-    opacity 200ms ease;
+    transform 260ms var(--ease-out),
+    opacity 160ms ease;
 }
 
 .mascot .m-glint {
@@ -61,22 +51,24 @@
 }
 
 .mascot .m-mouth-o,
-.mascot .m-mouth-grin {
-  opacity: 0;
-  transition: opacity 160ms ease;
-}
-
+.mascot .m-mouth-grin,
 .mascot .m-mouth-smile {
   transition: opacity 160ms ease;
 }
 
-/* Hands over the eyes while the password is hidden */
+.mascot .m-mouth-o,
+.mascot .m-mouth-grin {
+  opacity: 0;
+}
+
+/* ---- Covering: paws centred exactly on the eyes (94,135) and (146,135).
+   Offsets account for the 12° rotation about the paw's lower pivot. */
 .mascot.is-covering .m-arm-left {
-  transform: translate(38px, -62px) rotate(28deg);
+  transform: translate(39px, -49px) rotate(12deg);
 }
 
 .mascot.is-covering .m-arm-right {
-  transform: translate(-38px, -62px) rotate(-28deg);
+  transform: translate(-39px, -49px) rotate(-12deg);
 }
 
 .mascot.is-covering .m-mouth-smile {
@@ -87,14 +79,29 @@
   opacity: 1;
 }
 
-/* Sunglasses while the password is visible */
+/* Coming back from "cool", the eyes only reappear once the paws are over them. */
+.mascot.is-covering .m-eyes {
+  opacity: 1;
+  transition: opacity 0s linear 420ms;
+}
+
+/* ---- Cool: eyes are hidden instantly, glasses drop on, then the paws lower. */
+.mascot.is-cool .m-eyes {
+  opacity: 0;
+  transition: none;
+}
+
 .mascot.is-cool .m-glasses {
-  transform: translateY(0) rotate(0deg);
+  transform: translateY(0) scale(1);
   opacity: 1;
 }
 
+.mascot.is-cool .m-arm {
+  transition-delay: 80ms;
+}
+
 .mascot.is-cool .m-glint {
-  animation: m-glint 1.8s 0.45s ease-in-out infinite;
+  animation: m-glint 1.8s 0.35s ease-in-out infinite;
 }
 
 .mascot.is-cool .m-mouth-smile {
@@ -103,10 +110,6 @@
 
 .mascot.is-cool .m-mouth-grin {
   opacity: 1;
-}
-
-.mascot.is-cool .m-arm-right {
-  transform: translate(-6px, -18px) rotate(-36deg);
 }
 
 .mascot.is-oops .m-body-group {
@@ -129,15 +132,6 @@
   }
 }
 
-@keyframes m-blink {
-  0%, 46%, 50%, 100% {
-    transform: scaleY(1);
-  }
-  48% {
-    transform: scaleY(0.1);
-  }
-}
-
 @keyframes m-glint {
   0% {
     transform: translateX(-40px);
@@ -146,17 +140,20 @@
   30% {
     opacity: 0.9;
   }
-  60%, 100% {
+  60%,
+  100% {
     transform: translateX(40px);
     opacity: 0;
   }
 }
 
 @keyframes m-shake {
-  20%, 60% {
+  20%,
+  60% {
     transform: translateX(-8px) rotate(-3deg);
   }
-  40%, 80% {
+  40%,
+  80% {
     transform: translateX(8px) rotate(3deg);
   }
 }
@@ -172,8 +169,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .mascot .m-body-group,
-  .mascot .m-sprout,
-  .mascot .m-eyes {
+  .mascot .m-sprout {
     animation: none !important;
   }
 }
