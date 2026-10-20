@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Log in · Habit Tracker</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="/css/mascot.css" />
+    <script type="module" src="/js/pages/login.js"></script>
+  </head>
+  <body>
+    <main class="auth">
+      <section class="auth-stage" aria-label="Welcome">
+        <div id="mascot"></div>
+        <div class="stage-copy">
+          <h1>Small marks, every day.</h1>
+          <p>Check in once a day and watch the chain grow. Miss a day and start the next one.</p>
+        </div>
+      </section>
+
+      <section class="auth-panel">
+        <div class="auth-card">
+          <a class="brand" href="/login.html"><span class="brand-slot"></span>Habit Tracker</a>
+          <h2 class="section">Welcome back</h2>
+
+          <form id="login-form" class="form section" novalidate>
+            <div class="field" data-field="username">
+              <label for="username">Username</label>
+              <input class="input" id="username" name="username" autocomplete="username" required maxlength="30" />
+            </div>
+            <div class="field" data-field="password">
+              <label for="password">Password</label>
+              <div class="input-group">
+                <input class="input" id="password" name="password" type="password" autocomplete="current-password" required maxlength="200" />
+                <button class="btn btn-ghost btn-sm reveal-toggle" id="toggle-password" type="button" aria-pressed="false" aria-label="Show password">Show</button>
+              </div>
+            </div>
+            <button class="btn btn-primary btn-block" type="submit">Log in</button>
+          </form>
+
+          <p class="switch">New here? <a href="/register.html">Create an account</a></p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Create account · Habit Tracker</title>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/app.css" />
+    <link rel="stylesheet" href="/css/mascot.css" />
+    <script type="module" src="/js/pages/register.js"></script>
+  </head>
+  <body>
+    <main class="auth">
+      <section class="auth-stage" aria-label="Welcome">
+        <div id="mascot"></div>
+        <div class="stage-copy">
+          <h1>Start your first tally.</h1>
+          <p>Pick one habit, mark it each day, and share it only if you want to.</p>
+        </div>
+      </section>
+
+      <section class="auth-panel">
+        <div class="auth-card">
+          <a class="brand" href="/login.html"><span class="brand-slot"></span>Habit Tracker</a>
+          <h2 class="section">Create an account</h2>
+
+          <form id="register-form" class="form section" novalidate>
+            <div class="field" data-field="username">
+              <label for="username">Username</label>
+              <input class="input" id="username" name="username" autocomplete="username" required minlength="3" maxlength="30" pattern="[A-Za-z0-9_]+" />
+              <p class="hint">3–30 letters, digits or underscores. Shown on shared habits.</p>
+            </div>
+            <div class="field" data-field="email">
+              <label for="email">Email</label>
+              <input class="input" id="email" name="email" type="email" autocomplete="email" required maxlength="254" />
+              <p class="hint">Private — only you and administrators can see it.</p>
+            </div>
+            <div class="field" data-field="password">
+              <label for="password">Password</label>
+              <div class="input-group">
+                <input class="input" id="password" name="password" type="password" autocomplete="new-password" required minlength="8" maxlength="72" />
+                <button class="btn btn-ghost btn-sm reveal-toggle" id="toggle-password" type="button" aria-pressed="false" aria-label="Show password">Show</button>
+              </div>
+              <p class="hint">At least 8 characters, with a letter and a digit.</p>
+            </div>
+            <button class="btn btn-accent btn-block" type="submit">Create account</button>
+          </form>
+
+          <p class="switch">Already have an account? <a href="/login.html">Log in</a></p>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>
