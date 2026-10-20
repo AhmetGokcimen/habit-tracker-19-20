@@ -26,8 +26,10 @@ function intFromEnv(name, fallback, min, max) {
 
 // Local development uses a SQLite file (file:...), production uses Turso
 // (libsql://...). Same driver, same SQL dialect — only this URL changes.
+// The Turso integration on Vercel provisions TURSO_DATABASE_URL / TURSO_AUTH_TOKEN;
+// those names are accepted as fallbacks.
 function databaseConfig() {
-  const url = process.env.DATABASE_URL || 'file:./data/habit-tracker.db';
+  const url = process.env.DATABASE_URL || process.env.TURSO_DATABASE_URL || 'file:./data/habit-tracker.db';
   if (url.startsWith('file:')) {
     const filePath = path.resolve(ROOT, url.slice('file:'.length));
     return { url: `file:${filePath.split(path.sep).join('/')}`, filePath, authToken: undefined };
@@ -35,7 +37,9 @@ function databaseConfig() {
   if (!/^(libsql|https):\/\//.test(url)) {
     throw new Error('DATABASE_URL must start with file:, libsql:// or https://');
   }
-  return { url, filePath: null, authToken: required('DATABASE_AUTH_TOKEN') };
+  const authToken = process.env.DATABASE_AUTH_TOKEN || process.env.TURSO_AUTH_TOKEN;
+  if (!authToken) throw new Error('DATABASE_AUTH_TOKEN (or TURSO_AUTH_TOKEN) is required for a remote database');
+  return { url, filePath: null, authToken };
 }
 
 const jwtSecret = required('JWT_SECRET');
