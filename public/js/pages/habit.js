@@ -58,7 +58,7 @@ function ownerTools() {
     tools.push(edit, share);
   }
   if (isOwner() || isAdmin()) {
-    const del = el('button', { class: 'btn btn-sm btn-danger', text: isOwner() ? 'Delete' : 'Delete (admin)', attrs: { type: 'button' } });
+    const del = el('button', { class: 'btn btn-sm btn-danger', text: isOwner() ? 'Delete' : 'Remove habit', attrs: { type: 'button' } });
     del.addEventListener('click', async () => {
       const ok = await confirmDialog({
         title: 'Delete this habit?',

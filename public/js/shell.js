@@ -1,6 +1,7 @@
 // Shared page shell: session check, top bar, toasts, dialogs, form errors.
-// The top bar hides "Admin" for non-admins purely as UX — the server enforces
-// every permission on its own.
+// No page links to the admin panel (it is reached only by its URL). That is
+// not what protects it: every admin API call is refused unless the database
+// says the caller is an admin.
 
 import { api, ApiError, goToLogin } from './api.js';
 import { el, svg, $, $all } from './dom.js';
@@ -23,7 +24,6 @@ const NAV = [
   { href: '/', label: 'Today', key: 'today' },
   { href: '/explore.html', label: 'Explore', key: 'explore' },
   { href: '/profile.html', label: 'Profile', key: 'profile' },
-  { href: '/admin.html', label: 'Admin', key: 'admin', adminOnly: true },
 ];
 
 function renderTopbar(user, active) {
@@ -46,7 +46,7 @@ function renderTopbar(user, active) {
       el(
         'nav',
         { class: 'nav', attrs: { 'aria-label': 'Main' } },
-        NAV.filter((item) => !item.adminOnly || user.role === 'admin').map((item) =>
+        NAV.map((item) =>
           el('a', {
             text: item.label,
             attrs: { href: item.href, 'aria-current': item.key === active ? 'page' : undefined },
@@ -56,7 +56,6 @@ function renderTopbar(user, active) {
       el(
         'div',
         { class: 'account' },
-        user.role === 'admin' ? el('span', { class: 'role-badge', text: 'admin' }) : null,
         el('a', { class: 'who', text: `@${user.username}`, attrs: { href: '/profile.html' } }),
         logout,
       ),
