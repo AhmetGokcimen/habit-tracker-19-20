@@ -32,3 +32,7 @@ Thumbs.db
 
 # Vercel CLI project link
 .vercel
+
+# Agent skills installed by tooling (not part of the app)
+.agents/
+skills-lock.json
