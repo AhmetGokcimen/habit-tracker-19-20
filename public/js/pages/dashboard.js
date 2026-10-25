@@ -5,13 +5,15 @@ import { el, $, localISODate, addDays, formatShortDate, formatDate } from '../do
 import { initPage, toast, errorMessage } from '../shell.js';
 import { reveal } from '../motion.js';
 import { createMascot } from '../mascot.js';
-import { categoryChip, visibilityLabel, chain, streakBadge, habitDialog, isDue, scheduleLabel, announceNewBadges } from '../components.js';
+import { categoryChip, visibilityLabel, chain, streakBadge, habitDialog, isDue, scheduleLabel, announceNewBadges, chainCalendar } from '../components.js';
 
 const main = $('#main');
 const today = localISODate();
 let habits = [];
 let freezesLeft = 0;
 let buddy = null; // { node, mascot, bubble }
+let chainYear = Number(today.slice(0, 4));
+let chainDays = [];
 
 function greeting(name) {
   const h = new Date().getHours();
@@ -239,11 +241,50 @@ function render() {
     body = el('div', { class: 'grid' }, habits.map(habitCard));
   }
 
-  main.replaceChildren(head, el('section', { class: 'section' }, el('div', { class: 'section-head' }, el('h2', { text: 'Your habits' }), el('span', { class: 'mono muted', text: `${habits.length} total` })), body));
+  main.replaceChildren(
+    head,
+    el('section', { class: 'section' }, el('div', { class: 'section-head' }, el('h2', { text: 'Your habits' }), el('span', { class: 'mono muted', text: `${habits.length} total` })), body),
+    habits.length ? el('section', { class: 'section', attrs: { id: 'chain' } }, wallCalendar()) : null,
+  );
+}
+
+// Overall day state for the wall calendar: X when everything due was done.
+function wallCalendar() {
+  const first = habits.reduce((min, h) => (h.created_at.slice(0, 10) < min ? h.created_at.slice(0, 10) : min), today);
+  const states = new Map();
+  for (const d of chainDays) {
+    if (d.date < first || d.date > today) continue;
+    let state;
+    if (d.due === 0) state = 'rest';
+    else if (d.done === d.due) state = 'done';
+    else if (d.done + d.frozen === d.due) state = 'frozen';
+    else if (d.done > 0) state = 'partial';
+    else if (d.date !== today) state = 'missed';
+    if (state) states.set(d.date, state);
+  }
+  return chainCalendar({
+    year: chainYear,
+    states,
+    minYear: Number(first.slice(0, 4)),
+    onYear: async (year) => {
+      chainYear = year;
+      await loadChain();
+      render();
+      $('#chain')?.scrollIntoView({ block: 'nearest' });
+    },
+  });
+}
+
+async function loadChain() {
+  try {
+    ({ days: chainDays } = await api.get(`/api/users/me/chain?year=${chainYear}`));
+  } catch {
+    chainDays = [];
+  }
 }
 
 async function load() {
-  ({ habits, freezes_left: freezesLeft } = await api.get('/api/habits/mine'));
+  [{ habits, freezes_left: freezesLeft }] = await Promise.all([api.get('/api/habits/mine'), loadChain()]);
   render();
   checkBadges();
 }

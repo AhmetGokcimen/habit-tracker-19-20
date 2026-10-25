@@ -276,3 +276,114 @@ export function announceNewBadges(userId, badges) {
   for (const b of fresh) toast(`${b.icon} New badge: ${b.title}`);
   return fresh;
 }
+
+// ---- "Don't break the chain" year calendar ------------------------------------------
+//
+// The paper wall calendar: twelve rows of months, a column per day of the
+// month, and a big red X over every day you kept your habits.
+//
+// states: Map "YYYY-MM-DD" -> 'done' | 'partial' | 'frozen' | 'rest' | 'missed'
+// Days without an entry are blank (before the habit existed, or in the future).
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const STATE_TEXT = {
+  done: 'kept — crossed off',
+  partial: 'partly done',
+  frozen: 'frozen',
+  rest: 'rest day',
+  missed: 'missed',
+};
+
+/** Longest and current run of 'done' days (frozen and rest days keep a run alive). */
+export function chainRuns(states, year) {
+  const today = localISODate();
+  let run = 0;
+  let longest = 0;
+  for (let d = `${year}-01-01`; d <= `${year}-12-31` && d <= today; d = addDays(d, 1)) {
+    const s = states.get(d);
+    if (s === 'done') {
+      run += 1;
+      longest = Math.max(longest, run);
+    } else if (s === 'frozen' || s === 'rest' || !s || d === today) {
+      // keeps the run (today is still open)
+    } else {
+      run = 0;
+    }
+  }
+  return { current: run, longest };
+}
+
+export function chainCalendar({ year, states, onYear, minYear = 2000 }) {
+  const today = localISODate();
+  const thisYear = Number(today.slice(0, 4));
+  const grid = el('div', { class: 'wall-grid', attrs: { role: 'grid', 'aria-label': `Chain calendar ${year}` } });
+
+  grid.append(el('span', { class: 'wall-corner', attrs: { 'aria-hidden': 'true' } }));
+  for (let d = 1; d <= 31; d++) grid.append(el('span', { class: 'wall-daynum', text: String(d), attrs: { 'aria-hidden': 'true' } }));
+
+  for (let m = 0; m < 12; m++) {
+    const row = el('div', { class: 'wall-row', attrs: { role: 'row' } }, el('span', { class: 'wall-month', text: MONTHS[m], attrs: { role: 'rowheader' } }));
+    const daysInMonth = new Date(year, m + 1, 0).getDate();
+    for (let d = 1; d <= 31; d++) {
+      if (d > daysInMonth) {
+        row.append(el('span', { class: 'wall-cell is-void', attrs: { 'aria-hidden': 'true' } }));
+        continue;
+      }
+      const date = `${year}-${String(m + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      const state = states.get(date) ?? (date > today ? 'future' : 'blank');
+      const label = `${MONTHS[m]} ${d}${STATE_TEXT[state] ? `: ${STATE_TEXT[state]}` : ''}`;
+      row.append(
+        el('span', {
+          class: `wall-cell is-${state}${date === today ? ' is-today' : ''}`,
+          attrs: { role: 'gridcell', title: label, 'aria-label': label },
+          vars: { '--r': `${((d * 37 + m * 11) % 13) - 6}deg` },
+        }),
+      );
+    }
+    grid.append(row);
+  }
+
+  const prev = el('button', { class: 'btn btn-ghost btn-sm', text: '‹', attrs: { type: 'button', 'aria-label': 'Previous year' } });
+  const next = el('button', { class: 'btn btn-ghost btn-sm', text: '›', attrs: { type: 'button', 'aria-label': 'Next year' } });
+  prev.disabled = year <= minYear;
+  next.disabled = year >= thisYear;
+  prev.addEventListener('click', () => onYear(year - 1));
+  next.addEventListener('click', () => onYear(year + 1));
+
+  const runs = chainRuns(states, year);
+  const legend = el(
+    'ul',
+    { class: 'wall-legend' },
+    [
+      ['done', 'kept'],
+      ['partial', 'partly'],
+      ['frozen', 'frozen'],
+      ['rest', 'rest day'],
+      ['missed', 'missed'],
+    ].map(([state, text]) => el('li', {}, el('span', { class: `wall-cell is-${state}`, attrs: { 'aria-hidden': 'true' } }), text)),
+  );
+
+  return el(
+    'div',
+    { class: 'wall card' },
+    el(
+      'div',
+      { class: 'wall-head' },
+      el(
+        'div',
+        {},
+        el('h2', { text: 'Don’t break the chain' }),
+        el('p', { class: 'hint', text: 'Every day you keep your habits gets a big red X. After a few days you have a chain — your only job is not to break it. Inspired by Barış Özcan’s “Zinciri Kırma” calendar.' }),
+      ),
+      el('div', { class: 'wall-year' }, prev, el('strong', { class: 'mono', text: String(year) }), next),
+    ),
+    el(
+      'div',
+      { class: 'wall-runs' },
+      el('span', {}, el('strong', { text: String(runs.current) }), ' days in the current chain'),
+      el('span', {}, el('strong', { text: String(runs.longest) }), ` longest in ${year}`),
+    ),
+    el('div', { class: 'wall-scroll' }, grid),
+    legend,
+  );
+}

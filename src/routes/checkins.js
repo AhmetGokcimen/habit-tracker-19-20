@@ -90,6 +90,17 @@ habitCheckins.post(
   },
 );
 
+// One year of this habit for the chain calendar (owner/admin, like the history).
+habitCheckins.get('/year', authorize('habit', 'listCheckins'), validate({ query: schemas.chainQuery }), async (req, res) => {
+  const year = req.valid.query.year ?? new Date().getUTCFullYear();
+  const range = [req.resource.id, `${year}-01-01`, `${year}-12-31`];
+  const [done, frozen] = await Promise.all([
+    db.all('SELECT checkin_date FROM checkins WHERE habit_id = ? AND checkin_date BETWEEN ? AND ? ORDER BY checkin_date', range),
+    db.all('SELECT freeze_date FROM streak_freezes WHERE habit_id = ? AND freeze_date BETWEEN ? AND ? ORDER BY freeze_date', range),
+  ]);
+  res.json({ year, done: done.map((r) => r.checkin_date), frozen: frozen.map((r) => r.freeze_date) });
+});
+
 // ---- /api/checkins/:id ---------------------------------------------------
 
 const checkins = express.Router();

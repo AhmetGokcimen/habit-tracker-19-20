@@ -140,3 +140,36 @@ describe('F6 — personal statistics', () => {
     assert.equal((await request(app).get('/api/users/me/stats')).status, 401);
   });
 });
+
+describe('Don\'t break the chain — year calendars', () => {
+  test('overall chain is per day, own data only, and the year is validated', async () => {
+    await createUser('chainer');
+    const me = await loginAs(app, 'chainer');
+    const h = (await me.post('/api/habits').send({ title: 'Chain', category: 'other' })).body.habit;
+    await me.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: day(0) });
+
+    const res = await me.get('/api/users/me/chain');
+    assert.equal(res.status, 200);
+    const todayEntry = res.body.days.find((d) => d.date === day(0));
+    assert.deepEqual({ due: todayEntry.due, done: todayEntry.done }, { due: 1, done: 1 });
+
+    for (const q of ['?year=1999', '?year=3000', '?year=abc', '?year=2024&year=2025', '?habit=1']) {
+      assert.equal((await me.get(`/api/users/me/chain${q}`)).status, 400, q);
+    }
+    assert.deepEqual((await me.get('/api/users/me/chain?year=2001')).body.days.every((d) => d.done === 0), true);
+  });
+
+  test('a habit\'s year is private like its check-ins', async () => {
+    await createUser('chainowner');
+    await createUser('chainpeek');
+    const owner = await loginAs(app, 'chainowner');
+    const peek = await loginAs(app, 'chainpeek');
+    const h = (await owner.post('/api/habits').send({ title: 'Open chain', category: 'other', is_public: true })).body.habit;
+    await owner.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: day(0) });
+
+    const res = await owner.get(`/api/habits/${h.id}/checkins/year`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.done, [day(0)]);
+    assert.equal((await peek.get(`/api/habits/${h.id}/checkins/year`)).status, 403);
+  });
+});

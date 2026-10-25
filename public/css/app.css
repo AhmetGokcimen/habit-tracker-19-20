@@ -1851,3 +1851,173 @@ textarea {
     grid-template-columns: 6.5rem 1fr 2rem;
   }
 }
+
+/* ---------- "Don't break the chain" wall calendar ---------- */
+
+.wall {
+  --cell: 22px;
+  display: grid;
+  gap: var(--s-4);
+}
+
+.wall-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.wall-head h2 {
+  margin: 0 0 var(--s-1);
+}
+
+.wall-head .hint {
+  max-width: 62ch;
+}
+
+.wall-year {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.wall-runs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-5);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.wall-runs strong {
+  font-family: var(--font-display);
+  font-size: var(--step-2);
+  color: var(--coral-deep);
+}
+
+.wall-scroll {
+  overflow-x: auto;
+  padding: 4px 4px var(--s-2);
+}
+
+.wall-grid {
+  display: grid;
+  grid-template-columns: 2.6rem repeat(31, var(--cell));
+  gap: 3px;
+  width: max-content;
+}
+
+.wall-row {
+  display: contents;
+}
+
+.wall-daynum,
+.wall-month {
+  font-family: var(--font-mono);
+  font-size: 0.625rem;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
+.wall-month {
+  align-self: center;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.wall-cell {
+  position: relative;
+  display: block;
+  width: var(--cell);
+  height: var(--cell);
+  border: 1px solid var(--line);
+  background: var(--card);
+}
+
+.wall-cell.is-void {
+  border-color: transparent;
+  background: transparent;
+}
+
+.wall-cell.is-future {
+  border-style: dashed;
+  background: transparent;
+}
+
+.wall-cell.is-today {
+  outline: 2px solid var(--ink);
+  outline-offset: 1px;
+}
+
+.wall-cell.is-missed {
+  background: var(--paper-deep);
+}
+
+.wall-cell.is-rest::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--ink-soft);
+  opacity: 0.5;
+}
+
+.wall-cell.is-frozen {
+  background: #bfe3f2;
+  border-color: #5aa9c9;
+}
+
+/* The big red X: two hand-drawn strokes, slightly tilted per day. */
+.wall-cell.is-done::before,
+.wall-cell.is-done::after,
+.wall-cell.is-partial::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 3px;
+  height: 128%;
+  border-radius: 2px;
+  background: var(--coral);
+  transform: translate(-50%, -50%) rotate(calc(45deg + var(--r, 0deg)));
+}
+
+.wall-cell.is-done::after {
+  transform: translate(-50%, -50%) rotate(calc(-45deg - var(--r, 0deg)));
+}
+
+.wall-cell.is-partial::before {
+  opacity: 0.55;
+}
+
+.wall-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-4);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.wall-legend li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.wall-legend .wall-cell {
+  --cell: 16px;
+}
+
+@media (max-width: 640px) {
+  .wall {
+    --cell: 18px;
+  }
+}

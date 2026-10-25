@@ -154,6 +154,16 @@ const statsQuery = z.strictObject({
   range: z.enum(['30', '90', '365'], 'Range must be 30, 90 or 365').default('30'),
 });
 
+// "Don't break the chain" calendar: one year, from 2000 up to the current year.
+const chainQuery = z.strictObject({
+  year: z.coerce
+    .number()
+    .int()
+    .min(2000)
+    .refine((y) => y <= new Date().getUTCFullYear() + 1, 'Year must not be in the future')
+    .optional(),
+});
+
 const roleUpdate = z.strictObject({
   role: z.enum(['user', 'admin'], 'Role must be "user" or "admin"'),
 });
@@ -172,4 +182,5 @@ module.exports = {
   checkinUpdate,
   freezeCreate,
   statsQuery,
+  chainQuery,
 };

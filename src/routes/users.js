@@ -91,6 +91,17 @@ router.get('/me/stats', validate({ query: schemas.statsQuery }), async (req, res
   });
 });
 
+// Year calendar of overall daily progress ("don't break the chain").
+router.get('/me/chain', validate({ query: schemas.chainQuery }), async (req, res) => {
+  const today = schedule.todayNumber();
+  const year = req.valid.query.year ?? new Date().getUTCFullYear();
+  const from = schedule.dayNumber(`${year}-01-01`);
+  // One day of slack for users ahead of UTC.
+  const to = Math.min(schedule.dayNumber(`${year}-12-31`), today + 1);
+  const days = to < from ? [] : progress.days(await progress.load(req.user.id, from, to), from, to);
+  res.json({ year, days });
+});
+
 router.post(
   '/me/password',
   limiters.passwordChange,

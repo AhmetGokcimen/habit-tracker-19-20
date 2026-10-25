@@ -7,7 +7,7 @@ import { api, ApiError } from '../api.js';
 import { el, $, idFromQuery, localISODate, addDays, formatDate, formatTimestamp } from '../dom.js';
 import { initPage, toast, errorMessage, confirmDialog, showFormErrors, clearFormErrors, withBusy } from '../shell.js';
 import { reveal } from '../motion.js';
-import { categoryChip, visibilityLabel, streakBadge, habitDialog, isDue, scheduleLabel } from '../components.js';
+import { categoryChip, visibilityLabel, streakBadge, habitDialog, isDue, scheduleLabel, chainCalendar } from '../components.js';
 
 const MAX_PHOTO_BYTES = 1024 * 1024;
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -20,6 +20,8 @@ let checkins = [];
 let streak = null;
 let freezes = [];
 let freezesLeft = 0;
+let chainYear = Number(localISODate().slice(0, 4));
+let year = { done: [], frozen: [] };
 let comments = [];
 
 const isOwner = () => habit.owner.id === user.id;
@@ -446,14 +448,52 @@ async function loadComments() {
 
 async function refresh() {
   ({ habit } = await api.get(`/api/habits/${habitId}`));
-  if (isOwner() || isAdmin()) ({ checkins, streak, freezes, freezes_left: freezesLeft } = await api.get(`/api/habits/${habit.id}/checkins`));
+  if (isOwner() || isAdmin()) {
+    [{ checkins, streak, freezes, freezes_left: freezesLeft }] = await Promise.all([api.get(`/api/habits/${habit.id}/checkins`), loadYear()]);
+  }
   await loadComments();
+}
+
+function habitWall() {
+  const today = localISODate();
+  const created = habit.created_at.slice(0, 10);
+  const done = new Set(year.done);
+  const frozen = new Set(year.frozen);
+  const states = new Map();
+  for (let d = `${chainYear}-01-01`; d <= `${chainYear}-12-31` && d <= today; d = addDays(d, 1)) {
+    if (done.has(d)) states.set(d, 'done');
+    else if (d < created) continue;
+    else if (frozen.has(d)) states.set(d, 'frozen');
+    else if (habit.schedule.type === 'weekly' || d === today) continue;
+    else if (!isDue(habit, d)) states.set(d, 'rest');
+    else states.set(d, 'missed');
+  }
+  return chainCalendar({
+    year: chainYear,
+    states,
+    minYear: Math.min(Number(created.slice(0, 4)), ...year.done.map((d) => Number(d.slice(0, 4)))),
+    onYear: async (y) => {
+      chainYear = y;
+      await loadYear();
+      render();
+      $('#chain')?.scrollIntoView({ block: 'nearest' });
+    },
+  });
+}
+
+async function loadYear() {
+  ({ done: year.done, frozen: year.frozen } = await api.get(`/api/habits/${habit.id}/checkins/year?year=${chainYear}`));
 }
 
 function render() {
   document.title = `${habit.title} · Habit Tracker`;
-  const left = isOwner() || isAdmin() ? checkinSection() : el('section', {}, el('div', { class: 'empty' }, el('h2', { text: 'Check-ins are private' }), el('p', { class: 'muted', text: `Only @${habit.owner.username} can see their check-in history.` })));
-  main.replaceChildren(header(), el('div', { class: 'detail' }, left, commentSection()));
+  const canSee = isOwner() || isAdmin();
+  const left = canSee ? checkinSection() : el('section', {}, el('div', { class: 'empty' }, el('h2', { text: 'Check-ins are private' }), el('p', { class: 'muted', text: `Only @${habit.owner.username} can see their check-in history.` })));
+  main.replaceChildren(
+    header(),
+    canSee ? el('section', { class: 'section', attrs: { id: 'chain' } }, habitWall()) : null,
+    el('div', { class: 'detail section' }, left, commentSection()),
+  );
 }
 
 user = await initPage();
