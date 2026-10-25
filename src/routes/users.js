@@ -63,7 +63,7 @@ router.get('/me', async (req, res) => {
 });
 
 // Personal statistics over the last 30 / 90 / 365 days (own data only).
-router.get('/me/stats', validate({ query: schemas.statsQuery }), async (req, res) => {
+router.get('/me/stats', limiters.heavyReads, validate({ query: schemas.statsQuery }), async (req, res) => {
   const range = Number(req.valid.query.range);
   const to = schedule.todayNumber();
   const from = to - range + 1;
@@ -97,7 +97,7 @@ router.get('/me/stats', validate({ query: schemas.statsQuery }), async (req, res
 });
 
 // Year calendar of overall daily progress ("don't break the chain").
-router.get('/me/chain', validate({ query: schemas.chainQuery }), async (req, res) => {
+router.get('/me/chain', limiters.heavyReads, validate({ query: schemas.chainQuery }), async (req, res) => {
   const today = schedule.todayNumber();
   const year = req.valid.query.year ?? new Date().getUTCFullYear();
   const from = schedule.dayNumber(`${year}-01-01`);

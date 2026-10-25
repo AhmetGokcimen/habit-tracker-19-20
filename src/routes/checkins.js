@@ -17,6 +17,7 @@ const { moderationAudit } = require('../services/auditLog');
 const schedule = require('../services/schedule');
 const { freezesLeft } = require('../services/freezes');
 const { conflict, notFound } = require('../utils/httpError');
+const { limiters } = require('../middleware/rateLimit');
 
 const SELECT_CHECKIN = `SELECT id, habit_id, user_id, checkin_date, note, created_at, amount,
                                photo_data IS NOT NULL AS has_photo
@@ -120,7 +121,7 @@ habitCheckins.post(
 );
 
 // One year of this habit for the chain calendar (owner/admin, like the history).
-habitCheckins.get('/year', authorize('habit', 'listCheckins'), validate({ query: schemas.chainQuery }), async (req, res) => {
+habitCheckins.get('/year', limiters.heavyReads, authorize('habit', 'listCheckins'), validate({ query: schemas.chainQuery }), async (req, res) => {
   const year = req.valid.query.year ?? new Date().getUTCFullYear();
   const range = [req.resource.id, `${year}-01-01`, `${year}-12-31`];
   const [entries, frozen] = await Promise.all([

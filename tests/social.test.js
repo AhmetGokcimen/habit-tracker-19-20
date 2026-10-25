@@ -138,3 +138,15 @@ describe('deleting a user removes their social data everywhere', () => {
     assert.deepEqual({ ...left }, { f: 0, r: 0, z: 0 });
   });
 });
+
+describe('read limits', () => {
+  test('walking public profiles is rate limited per user', async () => {
+    await createUser('walker');
+    const walker = await loginAs(app, 'walker');
+    let limited = false;
+    for (let i = 0; i < 130 && !limited; i++) {
+      limited = (await walker.get(`/api/users/${1000 + i}/public`)).status === 429;
+    }
+    assert.equal(limited, true);
+  });
+});

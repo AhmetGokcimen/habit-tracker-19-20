@@ -17,6 +17,7 @@ const db = require('../db');
 const { requireAuth } = require('../middleware/authenticate');
 const { parseId } = require('../middleware/authorize');
 const { badRequest, conflict, notFound } = require('../utils/httpError');
+const { limiters } = require('../middleware/rateLimit');
 
 const MAX_FOLLOWS = 500;
 const FEED_LIMIT = 50;
@@ -64,7 +65,7 @@ router.get('/users/me/following', requireAuth, async (req, res) => {
 
 // ---- /api/users/:id/public ------------------------------------------------------
 
-router.get('/users/:id/public', requireAuth, async (req, res) => {
+router.get('/users/:id/public', requireAuth, limiters.profileReads, async (req, res) => {
   const user = await publicUser(req.params.id);
   const [habits, followers, following] = await Promise.all([
     db.all(
