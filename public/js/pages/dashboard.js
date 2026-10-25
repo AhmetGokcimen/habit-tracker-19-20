@@ -1,7 +1,7 @@
 // "Today": the signed-in user's own habits, today's tally and quick check-in.
 
 import { api, ApiError } from '../api.js';
-import { el, $, localISODate, formatShortDate, formatDate } from '../dom.js';
+import { el, $, localISODate, addDays, formatShortDate, formatDate } from '../dom.js';
 import { initPage, toast, errorMessage } from '../shell.js';
 import { reveal } from '../motion.js';
 import { categoryChip, visibilityLabel, chain, streakBadge, habitDialog, isDue, scheduleLabel } from '../components.js';
@@ -9,6 +9,7 @@ import { categoryChip, visibilityLabel, chain, streakBadge, habitDialog, isDue, 
 const main = $('#main');
 const today = localISODate();
 let habits = [];
+let freezesLeft = 0;
 
 function greeting(name) {
   const h = new Date().getHours();
@@ -67,6 +68,28 @@ async function checkIn(habit, button) {
   await load();
 }
 
+// Offer a freeze when yesterday was a missed due day right after a done
+// (or frozen) day — i.e. when a freeze would actually save a streak.
+function rescuable(habit) {
+  if (habit.schedule.type === 'weekly' || freezesLeft === 0) return false;
+  const yesterday = addDays(today, -1);
+  const before = addDays(today, -2);
+  const covered = (d) => habit.recent_checkins.includes(d) || habit.recent_freezes.includes(d);
+  return isDue(habit, yesterday) && !covered(yesterday) && covered(before);
+}
+
+async function freezeYesterday(habit, button) {
+  button.disabled = true;
+  try {
+    const res = await api.post(`/api/habits/${habit.id}/freezes`, { freeze_date: addDays(today, -1) });
+    toast(`Streak saved with a freeze — ${res.freezes_left} left this month`);
+    await load();
+  } catch (err) {
+    button.disabled = false;
+    toast(errorMessage(err), { error: true });
+  }
+}
+
 function habitCard(habit) {
   const isDone = doneToday(habit);
   const resting = !isDone && !dueToday(habit);
@@ -78,6 +101,11 @@ function habitCard(habit) {
         attrs: { type: 'button', 'aria-label': `Check in: ${habit.title}` },
       });
   if (!isDone) action.addEventListener('click', () => checkIn(habit, action));
+  let rescue = null;
+  if (rescuable(habit)) {
+    rescue = el('button', { class: 'btn btn-ghost btn-sm freeze-btn', text: '❄ Freeze yesterday', attrs: { type: 'button', title: `Missed yesterday? Use a streak freeze (${freezesLeft} left this month).` } });
+    rescue.addEventListener('click', () => freezeYesterday(habit, rescue));
+  }
   const weekly = habit.schedule.type === 'weekly'
     ? el('p', { class: 'mono muted', text: `${habit.week_count} of ${habit.schedule.times} this week` })
     : null;
@@ -101,6 +129,7 @@ function habitCard(habit) {
         {},
         streakBadge(habit.streak),
         weekly,
+        rescue,
         el('p', { class: 'mono muted', text: habit.last_checkin ? `last: ${formatDate(habit.last_checkin)}` : 'no check-ins yet' }),
       ),
       action,
@@ -153,7 +182,7 @@ function render() {
 }
 
 async function load() {
-  ({ habits } = await api.get('/api/habits/mine'));
+  ({ habits, freezes_left: freezesLeft } = await api.get('/api/habits/mine'));
   render();
 }
 

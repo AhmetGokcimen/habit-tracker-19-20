@@ -79,6 +79,7 @@ router.delete('/users/:id', authorize('user', 'read'), async (req, res) => {
         role: target.role,
       }),
       ['DELETE FROM comments WHERE user_id = ? OR habit_id IN (SELECT id FROM habits WHERE user_id = ?)', [id, id]],
+      ['DELETE FROM streak_freezes WHERE user_id = ?', [id]],
       ['DELETE FROM checkins WHERE user_id = ?', [id]],
       ['DELETE FROM habits WHERE user_id = ?', [id]],
       // Removing the session rows invalidates the user's tokens immediately.

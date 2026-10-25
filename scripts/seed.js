@@ -22,7 +22,7 @@ const { hashPassword } = require('../src/services/authService');
 const schedule = require('../src/services/schedule');
 const { SEED_ACCOUNTS, SEED_HABITS, CHECKIN_NOTES, SEED_COMMENTS } = require('./seed-data');
 
-const DROP_ORDER = ['comments', 'checkins', 'habits', 'sessions', 'rate_limits', 'rate_limit_windows', 'admin_audit_log', 'users'];
+const DROP_ORDER = ['comments', 'streak_freezes', 'checkins', 'habits', 'sessions', 'rate_limits', 'rate_limit_windows', 'admin_audit_log', 'users'];
 const PHOTO_EVERY_NTH_HABIT = 4;
 
 // 24 characters from a 58-symbol alphabet without look-alikes (~140 bits).

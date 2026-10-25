@@ -15,6 +15,7 @@ const { authorize } = require('../middleware/authorize');
 const { photoUpload, EXTENSIONS } = require('../middleware/upload');
 const { moderationAudit } = require('../services/auditLog');
 const schedule = require('../services/schedule');
+const { freezesLeft } = require('../services/freezes');
 const { conflict, notFound } = require('../utils/httpError');
 
 const SELECT_CHECKIN = `SELECT id, habit_id, user_id, checkin_date, note, created_at,
@@ -53,13 +54,18 @@ habitCheckins.use(requireAuth);
 // The streak is derived from private check-ins, so it is only returned here
 // (owner and admins), never on the public habit record.
 habitCheckins.get('/', authorize('habit', 'listCheckins'), async (req, res) => {
-  const [rows, dates] = await Promise.all([
+  const [rows, dates, freezes, left] = await Promise.all([
     db.all(`${SELECT_CHECKIN} WHERE habit_id = ? ORDER BY checkin_date DESC LIMIT 400`, [req.resource.id]),
     db.all('SELECT checkin_date FROM checkins WHERE habit_id = ?', [req.resource.id]),
+    db.all('SELECT freeze_date FROM streak_freezes WHERE habit_id = ? ORDER BY freeze_date', [req.resource.id]),
+    freezesLeft(req.resource.user_id),
   ]);
+  const frozen = freezes.map((f) => f.freeze_date);
   res.json({
     checkins: rows.map(serializeCheckin),
-    streak: schedule.streaks(req.resource, dates.map((d) => d.checkin_date)),
+    freezes: frozen,
+    freezes_left: left,
+    streak: schedule.streaks(req.resource, dates.map((d) => d.checkin_date), frozen),
   });
 });
 

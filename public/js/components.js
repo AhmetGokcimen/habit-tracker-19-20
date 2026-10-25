@@ -55,16 +55,19 @@ function stampRotation(isoDate) {
  */
 export function chain(dates, days = 21, habit = null) {
   const done = new Set(dates);
+  const frozen = new Set(habit?.recent_freezes ?? []);
   const today = localISODate();
   const cells = [];
   for (let i = days - 1; i >= 0; i--) {
     const date = addDays(today, -i);
     const isDone = done.has(date);
-    const isOff = !isDone && habit && !isDue(habit, date);
+    const isFrozen = !isDone && frozen.has(date);
+    const isOff = !isDone && !isFrozen && habit && !isDue(habit, date);
+    const state = isDone ? ' is-done' : isFrozen ? ' is-frozen' : isOff ? ' is-off' : '';
     cells.push(
       el('span', {
-        class: `day${isDone ? ' is-done' : ''}${isOff ? ' is-off' : ''}${i === 0 ? ' is-today' : ''}`,
-        attrs: { title: `${date}${isDone ? ' — checked in' : isOff ? ' — rest day' : ''}` },
+        class: `day${state}${i === 0 ? ' is-today' : ''}`,
+        attrs: { title: `${date}${isDone ? ' — checked in' : isFrozen ? ' — frozen' : isOff ? ' — rest day' : ''}` },
         vars: { '--r': isDone ? stampRotation(date) : '0deg', '--i': days - i },
       }),
     );

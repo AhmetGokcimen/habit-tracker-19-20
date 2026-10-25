@@ -107,6 +107,17 @@ const checkinDate = z
 
 const checkinNote = safeText(500, 'Note');
 
+// A freeze covers a recently missed day: up to 7 days back in the user's
+// calendar (8 in UTC, for time zones behind UTC), never a future day.
+const FREEZE_WINDOW_DAYS = 8;
+const freezeCreate = z.strictObject({
+  freeze_date: checkinDate.refine((s) => {
+    const today = new Date().toISOString().slice(0, 10);
+    const earliest = new Date(Date.now() - FREEZE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    return s >= earliest && s <= today;
+  }, 'You can only freeze one of the last 7 days'),
+});
+
 const checkinCreate = z.strictObject({
   checkin_date: checkinDate,
   note: checkinNote.default(''),
@@ -148,4 +159,5 @@ module.exports = {
   habitSearch,
   checkinCreate,
   checkinUpdate,
+  freezeCreate,
 };

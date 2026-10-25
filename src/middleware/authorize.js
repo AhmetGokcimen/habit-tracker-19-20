@@ -54,6 +54,8 @@ const policies = {
     delete: (u, h) => owns(u, h) || isAdmin(u),
     // Check-ins are only ever created by the habit owner on their own habit.
     addCheckin: (u, h) => owns(u, h),
+    // Streak freezes are the owner's own allowance.
+    freeze: (u, h) => owns(u, h),
     // Check-in history is private data (F5): owner and admins only.
     listCheckins: (u, h) => owns(u, h) || isAdmin(u),
     // Comments are read on public habits (owner/admin can still read them

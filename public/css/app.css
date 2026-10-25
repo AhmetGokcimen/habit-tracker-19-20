@@ -989,6 +989,32 @@ textarea {
   border-color: var(--coral-deep);
 }
 
+.heatmap .day.is-frozen,
+.chain .day.is-frozen {
+  background: #bfe3f2;
+  border-color: #5aa9c9;
+}
+
+.freeze-panel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}
+
+.freeze-choices {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin: var(--s-4) 0;
+}
+
+.freeze-btn {
+  color: #1f6f8f;
+}
+
 .heatmap .day.is-future {
   visibility: hidden;
 }

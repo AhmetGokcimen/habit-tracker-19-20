@@ -12,6 +12,7 @@ const { requireAuth } = require('../middleware/authenticate');
 const { authorize } = require('../middleware/authorize');
 const { moderationAudit } = require('../services/auditLog');
 const schedule = require('../services/schedule');
+const { freezesByHabit, freezesLeft } = require('../services/freezes');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -67,7 +68,7 @@ router.get('/', validate({ query: schemas.habitSearch }), async (req, res) => {
 // The caller's own habits (public and private), with private check-in stats
 // and streaks computed from the full history.
 router.get('/mine', async (req, res) => {
-  const [rows, dates] = await Promise.all([
+  const [rows, dates, freezes, left] = await Promise.all([
     db.all(
       `SELECT h.*, u.username AS owner_username,
               (SELECT COUNT(*) FROM checkins c WHERE c.habit_id = h.id) AS checkin_count,
@@ -80,16 +81,22 @@ router.get('/mine', async (req, res) => {
       [req.user.id],
     ),
     db.all('SELECT habit_id, checkin_date FROM checkins WHERE user_id = ?', [req.user.id]),
+    freezesByHabit(req.user.id),
+    freezesLeft(req.user.id),
   ]);
 
   const byHabit = groupDates(dates);
   const thisWeek = schedule.weekIndex(schedule.todayNumber());
+  const recentStart = schedule.isoDate(schedule.todayNumber() - 40);
   res.json({
+    freezes_left: left,
     habits: rows.map((row) => {
       const done = byHabit.get(row.id) ?? [];
+      const frozen = freezes.get(row.id) ?? [];
       return {
         ...serializeHabit(row),
-        streak: schedule.streaks(row, done),
+        streak: schedule.streaks(row, done, frozen),
+        recent_freezes: frozen.filter((d) => d >= recentStart).sort(),
         week_count: done.filter((d) => schedule.weekIndex(schedule.dayNumber(d)) === thisWeek).length,
       };
     }),
@@ -151,6 +158,7 @@ router.delete('/:id', authorize('habit', 'delete'), async (req, res) => {
   await db.batch([
     ...moderationAudit(req.user, user_id, 'habit.delete', 'habit', id, { owner_id: user_id, title }),
     ['DELETE FROM comments WHERE habit_id = ?', [id]],
+    ['DELETE FROM streak_freezes WHERE habit_id = ?', [id]],
     ['DELETE FROM checkins WHERE habit_id = ?', [id]],
     ['DELETE FROM habits WHERE id = ?', [id]],
   ]);

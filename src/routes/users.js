@@ -12,13 +12,14 @@ const { limiters } = require('../middleware/rateLimit');
 const { hashPassword, verifyPassword } = require('../services/authService');
 const { badRequest } = require('../utils/httpError');
 const schedule = require('../services/schedule');
+const { freezesByHabit } = require('../services/freezes');
 
 const router = express.Router();
 router.use(requireAuth);
 
 router.get('/me', async (req, res) => {
   const id = req.user.id;
-  const [account, counts, dates, habits] = await Promise.all([
+  const [account, counts, dates, habits, freezes] = await Promise.all([
     db.get('SELECT id, username, email, role, created_at FROM users WHERE id = ?', [id]),
     db.get(
       `SELECT (SELECT COUNT(*) FROM habits WHERE user_id = ?1) AS habits,
@@ -30,6 +31,7 @@ router.get('/me', async (req, res) => {
     ),
     db.all('SELECT habit_id, checkin_date FROM checkins WHERE user_id = ? ORDER BY habit_id, checkin_date', [id]),
     db.all('SELECT id, frequency, days_mask, weekly_target FROM habits WHERE user_id = ?', [id]),
+    freezesByHabit(id),
   ]);
 
   const byHabit = new Map();
@@ -41,7 +43,7 @@ router.get('/me', async (req, res) => {
   let longestStreak = 0;
   let bestCurrentStreak = 0;
   for (const habit of habits) {
-    const s = schedule.streaks(habit, byHabit.get(habit.id) ?? []);
+    const s = schedule.streaks(habit, byHabit.get(habit.id) ?? [], freezes.get(habit.id) ?? []);
     if (s.unit !== 'days') continue;
     longestStreak = Math.max(longestStreak, s.longest);
     bestCurrentStreak = Math.max(bestCurrentStreak, s.current);

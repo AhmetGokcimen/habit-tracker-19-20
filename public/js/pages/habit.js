@@ -18,6 +18,8 @@ let user;
 let habit;
 let checkins = [];
 let streak = null;
+let freezes = [];
+let freezesLeft = 0;
 let comments = [];
 
 const isOwner = () => habit.owner.id === user.id;
@@ -99,6 +101,7 @@ function header() {
 
 function heatmap() {
   const done = new Set(checkins.map((c) => c.checkin_date));
+  const frozen = new Set(freezes);
   const today = localISODate();
   const start = addDays(today, -83);
   const lead = (new Date(`${start}T12:00:00`).getDay() + 6) % 7; // Monday-first rows
@@ -107,9 +110,72 @@ function heatmap() {
   for (let i = 0; i < 84; i++) {
     const date = addDays(start, i);
     const off = !done.has(date) && !isDue(habit, date);
-    cells.push(el('span', { class: `day${done.has(date) ? ' is-done' : ''}${off ? ' is-off' : ''}`, attrs: { title: date } }));
+    const ice = !done.has(date) && frozen.has(date);
+    const state = done.has(date) ? ' is-done' : ice ? ' is-frozen' : off ? ' is-off' : '';
+    cells.push(el('span', { class: `day${state}`, attrs: { title: ice ? `${date} — frozen` : date } }));
   }
   return el('div', { class: 'heatmap', attrs: { role: 'img', 'aria-label': `${checkins.length} check-ins recorded` } }, cells);
+}
+
+// Missed due days in the last 7 days that a freeze could cover.
+function freezableDays() {
+  const done = new Set(checkins.map((c) => c.checkin_date));
+  const frozen = new Set(freezes);
+  const today = localISODate();
+  const days = [];
+  for (let i = 1; i <= 7; i++) {
+    const d = addDays(today, -i);
+    if (d >= habit.created_at.slice(0, 10) && isDue(habit, d) && !done.has(d) && !frozen.has(d)) days.push(d);
+  }
+  return days;
+}
+
+function freezePanel() {
+  const days = freezableDays();
+  const button = el('button', { class: 'btn btn-ghost btn-sm freeze-btn', text: '❄ Freeze a missed day', attrs: { type: 'button' } });
+  button.disabled = freezesLeft === 0 || days.length === 0;
+  button.addEventListener('click', async () => {
+    const day = await pickFreezeDay(days);
+    if (!day) return;
+    try {
+      await api.post(`/api/habits/${habit.id}/freezes`, { freeze_date: day });
+      toast(`${formatDate(day)} is frozen — your streak is safe`);
+      await refresh();
+    } catch (err) {
+      toast(errorMessage(err), { error: true });
+    }
+  });
+  const text = freezesLeft === 0
+    ? 'No streak freezes left this month.'
+    : `${freezesLeft} streak freeze${freezesLeft === 1 ? '' : 's'} left this month.`;
+  return el('div', { class: 'freeze-panel' }, el('p', { class: 'mono muted', text }), button);
+}
+
+function pickFreezeDay(days) {
+  return new Promise((resolve) => {
+    const dialog = el('dialog', { class: 'dialog', attrs: { 'aria-labelledby': 'fz-title' } });
+    const finish = (value) => {
+      dialog.close();
+      dialog.remove();
+      resolve(value);
+    };
+    const choices = days.map((d) => {
+      const b = el('button', { class: 'btn', text: formatDate(d), attrs: { type: 'button' } });
+      b.addEventListener('click', () => finish(d));
+      return b;
+    });
+    const cancel = el('button', { class: 'btn btn-ghost', text: 'Cancel', attrs: { type: 'button' } });
+    cancel.addEventListener('click', () => finish(null));
+    dialog.addEventListener('cancel', () => finish(null));
+    dialog.append(
+      el('h2', { text: 'Freeze a missed day', attrs: { id: 'fz-title' } }),
+      el('p', { class: 'muted', text: 'A frozen day keeps your streak alive. You get 2 per month; this can’t be undone.' }),
+      el('div', { class: 'freeze-choices' }, choices),
+      el('div', { class: 'dialog-actions' }, cancel),
+    );
+    document.body.append(dialog);
+    dialog.showModal();
+  });
 }
 
 function checkinForm() {
@@ -218,6 +284,7 @@ function checkinSection() {
     ),
     el('p', { class: 'mono muted', text: 'Last 12 weeks · private to you and admins' }),
     el('div', { class: 'section' }, heatmap()),
+    isOwner() ? freezePanel() : null,
     isOwner() ? el('div', { class: 'section' }, checkinForm()) : null,
     el(
       'div',
@@ -346,7 +413,7 @@ async function loadComments() {
 
 async function refresh() {
   ({ habit } = await api.get(`/api/habits/${habitId}`));
-  if (isOwner() || isAdmin()) ({ checkins, streak } = await api.get(`/api/habits/${habit.id}/checkins`));
+  if (isOwner() || isAdmin()) ({ checkins, streak, freezes, freezes_left: freezesLeft } = await api.get(`/api/habits/${habit.id}/checkins`));
   await loadComments();
 }
 

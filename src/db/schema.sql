@@ -89,6 +89,25 @@ BEGIN
   SELECT RAISE(ABORT, 'checkin owner and habit are immutable');
 END;
 
+-- Streak freezes (F-freeze): a missed day that keeps the streak alive.
+-- The monthly allowance is enforced atomically by the INSERT in routes/freezes.js.
+CREATE TABLE IF NOT EXISTS streak_freezes (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  habit_id    INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  freeze_date TEXT    NOT NULL CHECK (freeze_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (habit_id, freeze_date)
+);
+CREATE INDEX IF NOT EXISTS idx_freezes_user_date ON streak_freezes(user_id, freeze_date);
+
+CREATE TRIGGER IF NOT EXISTS freezes_owner_must_match
+BEFORE INSERT ON streak_freezes
+WHEN NEW.user_id IS NOT (SELECT user_id FROM habits WHERE id = NEW.habit_id)
+BEGIN
+  SELECT RAISE(ABORT, 'freeze owner must match habit owner');
+END;
+
 CREATE TABLE IF NOT EXISTS comments (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   habit_id   INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,

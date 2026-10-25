@@ -116,3 +116,78 @@ describe('F1 — habit schedules over the API', () => {
     assert.equal((await admin.get(`/api/habits/${h.id}/checkins`)).body.streak.current, 1);
   });
 });
+
+describe('F2 — streak freezes', () => {
+  const daysAgo = (n) => new Date(Date.now() - n * 86400000).toISOString().slice(0, 10);
+
+  test('a freeze keeps the streak alive across a missed day', () => {
+    const today = schedule.todayNumber();
+    const done = [schedule.isoDate(today - 3), schedule.isoDate(today - 1)];
+    assert.equal(schedule.streaks(DAILY, done, [], today).current, 1);
+    // The frozen day is kept but not counted.
+    assert.equal(schedule.streaks(DAILY, done, [schedule.isoDate(today - 2)], today).current, 2);
+  });
+
+  test('owner can freeze a missed recent day; it shows in the streak', async () => {
+    const h = (await bob.post('/api/habits').send({ title: 'Journal', category: 'mindfulness' })).body.habit;
+    await bob.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: daysAgo(3) });
+    await bob.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: daysAgo(1) });
+
+    const res = await bob.post(`/api/habits/${h.id}/freezes`).send({ freeze_date: daysAgo(2) });
+    assert.equal(res.status, 201);
+    const list = (await bob.get(`/api/habits/${h.id}/checkins`)).body;
+    assert.deepEqual(list.freezes, [daysAgo(2)]);
+    assert.ok(list.streak.current >= 2);
+
+    // Same day twice, or a day with a check-in -> 409.
+    assert.equal((await bob.post(`/api/habits/${h.id}/freezes`).send({ freeze_date: daysAgo(2) })).status, 409);
+    assert.equal((await bob.post(`/api/habits/${h.id}/freezes`).send({ freeze_date: daysAgo(1) })).status, 409);
+  });
+
+  test('freezes are validated: recent past days only, due days only, strict body', async () => {
+    const h = (await bob.post('/api/habits').send({ title: 'Weekend hike', category: 'fitness', schedule: { type: 'weekdays', days: [6, 7] } })).body.habit;
+    const bad = [
+      { freeze_date: daysAgo(-2) },
+      { freeze_date: daysAgo(30) },
+      { freeze_date: 'yesterday' },
+      { freeze_date: daysAgo(1), user_id: 1 },
+      {},
+    ];
+    for (const body of bad) {
+      assert.equal((await bob.post(`/api/habits/${h.id}/freezes`).send(body)).status, 400, JSON.stringify(body));
+    }
+    // A weekday that is not due for a weekends-only habit.
+    for (let i = 1; i <= 7; i++) {
+      const d = daysAgo(i);
+      const weekday = ((new Date(`${d}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+      if (weekday <= 5) {
+        assert.equal((await bob.post(`/api/habits/${h.id}/freezes`).send({ freeze_date: d })).status, 400);
+        break;
+      }
+    }
+  });
+
+  test('only the owner can freeze — not other users, not admins', async () => {
+    const h = (await alice.post('/api/habits').send({ title: 'Public yoga', category: 'fitness', is_public: true })).body.habit;
+    assert.equal((await bob.post(`/api/habits/${h.id}/freezes`).send({ freeze_date: daysAgo(1) })).status, 403);
+    assert.equal((await admin.post(`/api/habits/${h.id}/freezes`).send({ freeze_date: daysAgo(1) })).status, 403);
+  });
+
+  test('the monthly allowance holds even under parallel requests', async () => {
+    await createUser('racer');
+    const racer = await loginAs(app, 'racer');
+    const habitsCreated = [];
+    for (let i = 0; i < 6; i++) {
+      habitsCreated.push((await racer.post('/api/habits').send({ title: `H${i}`, category: 'other' })).body.habit);
+    }
+    // Pick a day in the current month when possible so all requests share one month.
+    const today = new Date().toISOString().slice(0, 10);
+    const day = daysAgo(1).slice(0, 7) === today.slice(0, 7) ? daysAgo(1) : today;
+    const results = await Promise.all(
+      habitsCreated.map((h) => racer.post(`/api/habits/${h.id}/freezes`).send({ freeze_date: day })),
+    );
+    assert.equal(results.filter((r) => r.status === 201).length, 2);
+    assert.ok(results.filter((r) => r.status !== 201).every((r) => r.status === 409));
+    assert.equal((await racer.get('/api/habits/mine')).body.freezes_left, 0);
+  });
+});
