@@ -52,7 +52,11 @@ CREATE TABLE IF NOT EXISTS habits (
   days_mask     INTEGER NOT NULL DEFAULT 127 CHECK (days_mask BETWEEN 1 AND 127),
   weekly_target INTEGER NOT NULL DEFAULT 7 CHECK (weekly_target BETWEEN 1 AND 7),
   -- Optional local reminder time "HH:MM". Private to the owner.
-  reminder_time TEXT    CHECK (reminder_time IS NULL OR reminder_time GLOB '[0-2][0-9]:[0-5][0-9]')
+  reminder_time TEXT    CHECK (reminder_time IS NULL OR reminder_time GLOB '[0-2][0-9]:[0-5][0-9]'),
+  -- Measurable habits: a day counts as done when a check-in's amount reaches
+  -- target_count ("8 glasses"). Plain habits have target 1 and no unit.
+  target_count  INTEGER NOT NULL DEFAULT 1 CHECK (target_count BETWEEN 1 AND 1000),
+  unit          TEXT    NOT NULL DEFAULT '' CHECK (length(unit) <= 20)
 );
 CREATE INDEX IF NOT EXISTS idx_habits_user ON habits(user_id);
 CREATE INDEX IF NOT EXISTS idx_habits_public_category ON habits(is_public, category);
@@ -70,6 +74,8 @@ CREATE TABLE IF NOT EXISTS checkins (
   photo_data     BLOB    CHECK (photo_data IS NULL OR length(photo_data) <= 1048576),
   photo_mime     TEXT    CHECK (photo_mime IS NULL OR photo_mime IN ('image/jpeg', 'image/png', 'image/webp')),
   created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+  -- Progress towards the habit's target_count on that day.
+  amount         INTEGER NOT NULL DEFAULT 1 CHECK (amount BETWEEN 1 AND 100000),
   UNIQUE (habit_id, checkin_date)
 );
 CREATE INDEX IF NOT EXISTS idx_checkins_habit ON checkins(habit_id);

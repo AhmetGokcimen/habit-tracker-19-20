@@ -20,7 +20,7 @@ const config = require('../src/config');
 const db = require('../src/db');
 const { hashPassword } = require('../src/services/authService');
 const schedule = require('../src/services/schedule');
-const { SEED_ACCOUNTS, SEED_HABITS, CHECKIN_NOTES, SEED_COMMENTS } = require('./seed-data');
+const { SEED_ACCOUNTS, SEED_HABITS, SEED_TARGETS, CHECKIN_NOTES, SEED_COMMENTS } = require('./seed-data');
 
 const DROP_ORDER = ['comments', 'streak_freezes', 'checkins', 'habits', 'sessions', 'rate_limits', 'rate_limit_windows', 'admin_audit_log', 'users'];
 const PHOTO_EVERY_NTH_HABIT = 4;
@@ -130,11 +130,13 @@ async function main() {
     const habitId = i + 1;
     const userId = userIds.get(owner);
     const { frequency, days_mask, weekly_target } = schedule.toColumns(plan ?? { type: 'daily' });
+    const [target, unit] = SEED_TARGETS[title] ?? [1, ''];
     habitIds.set(title, habitId);
     statements.push([
-      `INSERT INTO habits (id, user_id, title, description, category, is_public, frequency, days_mask, weekly_target, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '-35 days'), datetime('now', '-35 days'))`,
-      [habitId, userId, title, description, category, isPublic ? 1 : 0, frequency, days_mask, weekly_target],
+      `INSERT INTO habits (id, user_id, title, description, category, is_public, frequency, days_mask, weekly_target,
+                           target_count, unit, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '-35 days'), datetime('now', '-35 days'))`,
+      [habitId, userId, title, description, category, isPublic ? 1 : 0, frequency, days_mask, weekly_target, target, unit],
     ]);
     for (const [k, daysAgo] of checkinDays(checkins, rand).entries()) {
       const note = CHECKIN_NOTES[Math.floor(rand() * CHECKIN_NOTES.length)];
@@ -143,8 +145,8 @@ async function main() {
         : null;
       if (photo) photoCount += 1;
       statements.push([
-        'INSERT INTO checkins (habit_id, user_id, checkin_date, note, photo_data, photo_mime) VALUES (?, ?, ?, ?, ?, ?)',
-        [habitId, userId, isoDaysAgo(daysAgo), note, photo, photo ? 'image/png' : null],
+        'INSERT INTO checkins (habit_id, user_id, checkin_date, note, photo_data, photo_mime, amount) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [habitId, userId, isoDaysAgo(daysAgo), note, photo, photo ? 'image/png' : null, target],
       ]);
       checkinCount += 1;
     }

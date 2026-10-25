@@ -16,6 +16,7 @@ const SEED_ACCOUNTS = [
 
 // [owner, title, description, category, isPublic, check-ins in the last 30 days, schedule?]
 // schedule defaults to { type: 'daily' }; see src/services/schedule.js.
+// Measurable habits are listed in SEED_TARGETS below.
 const SEED_HABITS = [
   ['alice', 'Morning run', '5 km before breakfast. Rain or shine.', 'fitness', true, 14],
   ['alice', 'Read 20 pages', 'Currently reading a history of maps.', 'learning', true, 18],
@@ -40,6 +41,12 @@ const SEED_HABITS = [
   ['moderator', 'Evening walk', 'Leave the phone at home.', 'fitness', false, 11],
   ['moderator', 'Gratitude list', 'Three things, every night.', 'mindfulness', true, 16],
 ];
+
+// Habit title -> [daily goal, unit]. Seeded check-ins meet the goal.
+const SEED_TARGETS = {
+  'Drink 2 litres of water': [8, 'glasses'],
+  'Read 20 pages': [20, 'pages'],
+};
 
 const CHECKIN_NOTES = [
   'Felt great today.',
@@ -71,4 +78,4 @@ const SEED_COMMENTS = [
   ['Stretch before bed', 'moderator', 'Good for sleep, I can confirm.'],
 ];
 
-module.exports = { SEED_ACCOUNTS, SEED_HABITS, CHECKIN_NOTES, SEED_COMMENTS };
+module.exports = { SEED_ACCOUNTS, SEED_HABITS, SEED_TARGETS, CHECKIN_NOTES, SEED_COMMENTS };

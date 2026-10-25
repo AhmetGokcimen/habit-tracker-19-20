@@ -83,6 +83,48 @@ async function checkIn(habit, button) {
   buddy?.mascot.react('happy');
 }
 
+// Measurable habits: today's amount with -/+ steps (atomic on the server).
+function todayAmount(habit) {
+  return habit.latest_checkins.find((c) => c.checkin_date === today)?.amount ?? 0;
+}
+
+async function step(habit, delta, buttons) {
+  buttons.forEach((b) => (b.disabled = true));
+  try {
+    const before = doneToday(habit);
+    const res = await api.post(`/api/habits/${habit.id}/checkins/progress`, { checkin_date: today, delta });
+    const amount = res.checkin?.amount ?? 0;
+    if (!before && amount >= habit.target_count) toast(`Goal reached: ${habit.title}`);
+    await load();
+    if (!before && amount >= habit.target_count) buddy?.mascot.react('happy');
+  } catch (err) {
+    buttons.forEach((b) => (b.disabled = false));
+    toast(errorMessage(err), { error: true });
+  }
+}
+
+function counter(habit) {
+  const amount = todayAmount(habit);
+  const unit = habit.unit || 'times';
+  const minus = el('button', { class: 'btn btn-ghost btn-sm', text: '−', attrs: { type: 'button', 'aria-label': `Remove one from ${habit.title}` } });
+  const plus = el('button', { class: 'btn btn-accent btn-sm', text: '+1', attrs: { type: 'button', 'aria-label': `Add one to ${habit.title}` } });
+  minus.disabled = amount === 0;
+  minus.addEventListener('click', () => step(habit, -1, [minus, plus]));
+  plus.addEventListener('click', () => step(habit, 1, [minus, plus]));
+  return el(
+    'div',
+    { class: 'counter' },
+    el(
+      'div',
+      { class: 'counter-text' },
+      el('strong', { text: String(amount) }),
+      ` / ${habit.target_count} ${unit}`,
+      el('span', { class: 'counter-bar', vars: { '--w': `${Math.min(100, (amount / habit.target_count) * 100)}%` } }),
+    ),
+    el('div', { class: 'counter-buttons' }, minus, plus),
+  );
+}
+
 function undoButton(checkinId, title) {
   const b = el('button', { class: 'btn btn-ghost btn-sm', text: 'Undo', attrs: { type: 'button', 'aria-label': `Undo today's check-in: ${title}` } });
   b.addEventListener('click', () => {
@@ -131,6 +173,7 @@ function habitCard(habit) {
         attrs: { type: 'button', 'aria-label': `Check in: ${habit.title}` },
       });
   if (!isDone) action.addEventListener('click', () => checkIn(habit, action));
+  const measured = habit.target_count > 1 ? counter(habit) : null;
   let rescue = null;
   if (rescuable(habit)) {
     rescue = el('button', { class: 'btn btn-ghost btn-sm freeze-btn', text: '❄ Freeze yesterday', attrs: { type: 'button', title: `Missed yesterday? Use a streak freeze (${freezesLeft} left this month).` } });
@@ -151,6 +194,7 @@ function habitCard(habit) {
       habit.description ? el('p', { class: 'desc', text: habit.description }) : null,
     ),
     chain(habit.recent_checkins, 21, habit),
+    measured,
     el(
       'div',
       { class: 'actions' },
@@ -162,7 +206,7 @@ function habitCard(habit) {
         rescue,
         el('p', { class: 'mono muted', text: habit.last_checkin ? `last: ${formatDate(habit.last_checkin)}` : 'no check-ins yet' }),
       ),
-      action,
+      measured && !isDone ? null : action,
     ),
   );
 }

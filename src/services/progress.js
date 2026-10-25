@@ -16,11 +16,12 @@ const schedule = require('./schedule');
 async function load(userId, from, to) {
   const [habits, checkins, freezes] = await Promise.all([
     db.all('SELECT * FROM habits WHERE user_id = ? ORDER BY id', [userId]),
-    db.all('SELECT habit_id, checkin_date FROM checkins WHERE user_id = ? AND checkin_date BETWEEN ? AND ?', [
-      userId,
-      schedule.isoDate(from),
-      schedule.isoDate(to),
-    ]),
+    // Only completed days (amount reached the target) count as done.
+    db.all(
+      `SELECT c.habit_id, c.checkin_date FROM checkins c JOIN habits h ON h.id = c.habit_id
+        WHERE c.user_id = ? AND c.amount >= h.target_count AND c.checkin_date BETWEEN ? AND ?`,
+      [userId, schedule.isoDate(from), schedule.isoDate(to)],
+    ),
     db.all('SELECT habit_id, freeze_date FROM streak_freezes WHERE user_id = ? AND freeze_date BETWEEN ? AND ?', [
       userId,
       schedule.isoDate(from),

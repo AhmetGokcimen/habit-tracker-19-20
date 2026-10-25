@@ -33,7 +33,11 @@ router.get('/me', async (req, res) => {
               (SELECT COUNT(*) FROM streak_freezes WHERE user_id = ?1) AS freezes`,
       [id],
     ),
-    db.all('SELECT habit_id, checkin_date FROM checkins WHERE user_id = ? ORDER BY habit_id, checkin_date', [id]),
+    db.all(
+      `SELECT c.habit_id, c.checkin_date FROM checkins c JOIN habits h ON h.id = c.habit_id
+        WHERE c.user_id = ? AND c.amount >= h.target_count ORDER BY c.habit_id, c.checkin_date`,
+      [id],
+    ),
     db.all('SELECT id, frequency, days_mask, weekly_target FROM habits WHERE user_id = ?', [id]),
     freezesByHabit(id),
   ]);

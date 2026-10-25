@@ -736,9 +736,21 @@ textarea {
   position: relative;
   z-index: 1;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--s-3);
+}
+
+/* Controls inside the card sit above the card-wide title link. */
+.habit-card .counter {
+  position: relative;
+  z-index: 1;
+}
+
+.habit-card .streak,
+.habit-card .actions .mono {
+  white-space: nowrap;
 }
 
 .habit-card .desc {
@@ -2020,4 +2032,65 @@ textarea {
   .wall {
     --cell: 18px;
   }
+}
+
+/* ---------- Measurable habits ---------- */
+
+.target-row {
+  display: grid;
+  grid-template-columns: 6rem 1fr;
+  gap: var(--s-2);
+}
+
+.input-num {
+  max-width: 8rem;
+}
+
+.counter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-3);
+}
+
+.counter-text {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: baseline;
+  column-gap: var(--s-1);
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  color: var(--ink-soft);
+}
+
+.counter-text strong {
+  font-family: var(--font-display);
+  font-size: var(--step-2);
+  color: var(--ink);
+}
+
+.counter-bar {
+  grid-column: 1 / -1;
+  height: 6px;
+  margin-top: var(--s-1);
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--coral) var(--w), var(--paper-deep) var(--w));
+}
+
+.counter-buttons {
+  display: flex;
+  gap: var(--s-1);
+}
+
+.log-item .amount {
+  display: block;
+  margin-top: var(--s-1);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
+.log-item .amount.is-met {
+  color: var(--success);
 }

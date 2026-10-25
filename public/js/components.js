@@ -112,6 +112,10 @@ export function habitDialog(habit = null) {
     );
     const isPublic = el('input', { attrs: { type: 'checkbox', name: 'is_public', id: 'hf-public' } });
     const sched = scheduleField(habit?.schedule ?? { type: 'daily' });
+    const target = el('input', { class: 'input input-num', attrs: { id: 'hf-target', name: 'target_count', type: 'number', min: 1, max: 1000, step: 1, required: true } });
+    target.value = String(habit?.target_count ?? 1);
+    const unit = el('input', { class: 'input', attrs: { id: 'hf-unit', name: 'unit', maxlength: 20, placeholder: 'glasses, pages, minutes…', 'aria-label': 'Unit' } });
+    unit.value = habit?.unit ?? '';
     const reminder = el('input', { class: 'input input-time', attrs: { id: 'hf-reminder', name: 'reminder_time', type: 'time' } });
     reminder.value = habit?.reminder_time ?? '';
 
@@ -131,6 +135,13 @@ export function habitDialog(habit = null) {
       field('description', 'Notes (optional)', description, 'Up to 1000 characters.'),
       field('category', 'Category', category),
       sched.node,
+      el(
+        'div',
+        { class: 'field', dataset: { field: 'target_count' } },
+        el('label', { text: 'Goal per day', attrs: { for: 'hf-target' } }),
+        el('div', { class: 'target-row' }, target, unit),
+        el('p', { class: 'hint', text: 'Leave it at 1 for a simple done / not done habit, or count something: 8 glasses, 20 pages.' }),
+      ),
       field('reminder_time', 'Remind me at (optional)', reminder, 'A reminder appears while Habit Tracker is open in a tab. Only you see this time.'),
       el(
         'div',
@@ -167,6 +178,8 @@ export function habitDialog(habit = null) {
         is_public: isPublic.checked,
         schedule: sched.value(),
         reminder_time: reminder.value ? reminder.value.slice(0, 5) : null,
+        target_count: Number(target.value),
+        unit: unit.value.trim(),
       };
       await withBusy(save, async () => {
         try {

@@ -70,6 +70,9 @@ const habitFields = {
   category: z.enum(CATEGORIES, 'Unknown category'),
   is_public: z.boolean(),
   schedule,
+  // Measurable habits ("8 glasses"); 1 and '' for a plain yes/no habit.
+  target_count: z.number().int('Target must be a whole number').min(1).max(1000, 'Target must be at most 1000'),
+  unit: safeText(20, 'Unit'),
   // Local wall-clock time, 00:00-23:59, or null for no reminder.
   reminder_time: z
     .string()
@@ -83,6 +86,8 @@ const habitCreate = z.strictObject({
   is_public: habitFields.is_public.default(false),
   schedule: schedule.default({ type: 'daily' }),
   reminder_time: habitFields.reminder_time.default(null),
+  target_count: habitFields.target_count.default(1),
+  unit: habitFields.unit.default(''),
 });
 
 const habitUpdate = z
@@ -124,13 +129,32 @@ const freezeCreate = z.strictObject({
   }, 'You can only freeze one of the last 7 days'),
 });
 
+// Multipart forms send numbers as text: accept a number or a string of digits
+// only (no booleans, exponents or whitespace that a blanket coerce would allow).
+const checkinAmount = z
+  .union([z.number(), z.string().regex(/^[0-9]{1,6}$/, 'Amount must be a whole number').transform(Number)])
+  .pipe(z.number().int('Amount must be a whole number').min(1, 'Amount must be at least 1').max(100000));
+
 const checkinCreate = z.strictObject({
   checkin_date: checkinDate,
   note: checkinNote.default(''),
+  // Defaults to the habit's target (a full check-in) in the route.
+  amount: checkinAmount.optional(),
+});
+
+// Atomic +/- on a day's amount (measurable habits).
+const checkinProgress = z.strictObject({
+  checkin_date: checkinDate,
+  delta: z
+    .number()
+    .int()
+    .min(-1000)
+    .max(1000)
+    .refine((n) => n !== 0, 'Delta must not be 0'),
 });
 
 const checkinUpdate = z
-  .strictObject({ checkin_date: checkinDate, note: checkinNote })
+  .strictObject({ checkin_date: checkinDate, note: checkinNote, amount: checkinAmount })
   .partial()
   .refine((body) => Object.keys(body).length > 0, 'Provide at least one field to update');
 
@@ -181,6 +205,7 @@ module.exports = {
   checkinCreate,
   checkinUpdate,
   freezeCreate,
+  checkinProgress,
   statsQuery,
   chainQuery,
 };

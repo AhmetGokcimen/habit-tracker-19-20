@@ -21,7 +21,7 @@ let streak = null;
 let freezes = [];
 let freezesLeft = 0;
 let chainYear = Number(localISODate().slice(0, 4));
-let year = { done: [], frozen: [] };
+let year = { done: [], partial: [], frozen: [] };
 let comments = [];
 
 const isOwner = () => habit.owner.id === user.id;
@@ -92,7 +92,7 @@ function header() {
       {},
       el('p', { class: 'eyebrow' }, categoryChip(habit.category), ' ', visibilityLabel(habit.is_public)),
       el('h1', { class: 'detail-title section', text: habit.title }),
-      el('p', { class: 'byline', text: `by @${habit.owner.username} · ${scheduleLabel(habit.schedule)} · since ${formatDate(habit.created_at)}` }),
+      el('p', { class: 'byline', text: `by @${habit.owner.username} · ${scheduleLabel(habit.schedule)}${habit.target_count > 1 ? ` · ${habit.target_count} ${habit.unit} a day` : ''} · since ${formatDate(habit.created_at)}` }),
       habit.description ? el('p', { class: 'description', text: habit.description }) : null,
     ),
     ownerTools(),
@@ -102,7 +102,7 @@ function header() {
 // ---- check-ins (private) ------------------------------------------------------
 
 function heatmap() {
-  const done = new Set(checkins.map((c) => c.checkin_date));
+  const done = new Set(checkins.filter((c) => c.amount >= habit.target_count).map((c) => c.checkin_date));
   const frozen = new Set(freezes);
   const today = localISODate();
   const start = addDays(today, -83);
@@ -217,6 +217,9 @@ function checkinForm() {
   const today = localISODate();
   const date = el('input', { class: 'input', attrs: { id: 'ci-date', name: 'checkin_date', type: 'date', required: true, max: today, min: '2000-01-01' } });
   date.value = today;
+  const measured = habit.target_count > 1;
+  const amount = el('input', { class: 'input input-num', attrs: { id: 'ci-amount', name: 'amount', type: 'number', min: 1, max: 100000, step: 1, required: true } });
+  amount.value = String(habit.target_count);
   const note = el('textarea', { class: 'textarea', attrs: { id: 'ci-note', name: 'note', maxlength: 500, placeholder: 'How did it go? (optional)' } });
   const photo = el('input', { attrs: { id: 'ci-photo', name: 'photo', type: 'file', accept: PHOTO_TYPES.join(',') } });
   const submit = el('button', { class: 'btn btn-accent', text: 'Check in', attrs: { type: 'submit' } });
@@ -226,6 +229,9 @@ function checkinForm() {
     { class: 'form card', attrs: { novalidate: true } },
     el('h3', { text: 'Add a check-in' }),
     el('div', { class: 'field', dataset: { field: 'checkin_date' } }, el('label', { text: 'Day', attrs: { for: 'ci-date' } }), date),
+    measured
+      ? el('div', { class: 'field', dataset: { field: 'amount' } }, el('label', { text: `How many ${habit.unit || 'times'}? (goal ${habit.target_count})`, attrs: { for: 'ci-amount' } }), amount)
+      : null,
     el('div', { class: 'field', dataset: { field: 'note' } }, el('label', { text: 'Note', attrs: { for: 'ci-note' } }), note),
     el(
       'div',
@@ -249,6 +255,7 @@ function checkinForm() {
     const data = new FormData();
     data.append('checkin_date', date.value);
     data.append('note', note.value.trim());
+    if (measured) data.append('amount', amount.value);
     if (file) data.append('photo', file);
 
     await withBusy(submit, async () => {
@@ -294,7 +301,12 @@ function checkinItem(c) {
   return el(
     'li',
     { class: 'log-item' },
-    el('span', { class: 'date', text: formatDate(c.checkin_date) }),
+    el(
+      'span',
+      { class: 'date' },
+      formatDate(c.checkin_date),
+      habit.target_count > 1 ? el('span', { class: `amount${c.amount >= habit.target_count ? ' is-met' : ''}`, text: `${c.amount} / ${habit.target_count} ${habit.unit}` }) : null,
+    ),
     el(
       'div',
       {},
@@ -458,12 +470,14 @@ function habitWall() {
   const today = localISODate();
   const created = habit.created_at.slice(0, 10);
   const done = new Set(year.done);
+  const partial = new Set(year.partial);
   const frozen = new Set(year.frozen);
   const states = new Map();
   for (let d = `${chainYear}-01-01`; d <= `${chainYear}-12-31` && d <= today; d = addDays(d, 1)) {
     if (done.has(d)) states.set(d, 'done');
     else if (d < created) continue;
     else if (frozen.has(d)) states.set(d, 'frozen');
+    else if (partial.has(d)) states.set(d, 'partial');
     else if (habit.schedule.type === 'weekly' || d === today) continue;
     else if (!isDue(habit, d)) states.set(d, 'rest');
     else states.set(d, 'missed');
@@ -482,7 +496,7 @@ function habitWall() {
 }
 
 async function loadYear() {
-  ({ done: year.done, frozen: year.frozen } = await api.get(`/api/habits/${habit.id}/checkins/year?year=${chainYear}`));
+  ({ done: year.done, partial: year.partial, frozen: year.frozen } = await api.get(`/api/habits/${habit.id}/checkins/year?year=${chainYear}`));
 }
 
 function render() {

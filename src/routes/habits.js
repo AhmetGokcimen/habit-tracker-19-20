@@ -29,6 +29,8 @@ function serializeHabit(row, viewer = null) {
     category: row.category,
     is_public: row.is_public === 1,
     schedule: schedule.fromRow(row),
+    target_count: row.target_count,
+    unit: row.unit,
     owner: { id: row.user_id, username: row.owner_username },
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -76,15 +78,20 @@ router.get('/mine', async (req, res) => {
               (SELECT COUNT(*) FROM checkins c WHERE c.habit_id = h.id) AS checkin_count,
               (SELECT MAX(checkin_date) FROM checkins c WHERE c.habit_id = h.id) AS last_checkin,
               (SELECT group_concat(checkin_date) FROM checkins c
-                WHERE c.habit_id = h.id AND c.checkin_date >= date('now', '-40 days')) AS recent_dates,
-              (SELECT group_concat(id || ':' || checkin_date) FROM checkins c
+                WHERE c.habit_id = h.id AND c.checkin_date >= date('now', '-40 days')
+                  AND c.amount >= h.target_count) AS recent_dates,
+              (SELECT group_concat(id || ':' || checkin_date || ':' || amount) FROM checkins c
                 WHERE c.habit_id = h.id AND c.checkin_date >= date('now', '-2 days')) AS latest_entries
          FROM habits h JOIN users u ON u.id = h.user_id
         WHERE h.user_id = ?
         ORDER BY h.created_at DESC, h.id DESC`,
       [req.user.id],
     ),
-    db.all('SELECT habit_id, checkin_date FROM checkins WHERE user_id = ?', [req.user.id]),
+    db.all(
+      `SELECT c.habit_id, c.checkin_date FROM checkins c JOIN habits h ON h.id = c.habit_id
+        WHERE c.user_id = ? AND c.amount >= h.target_count`,
+      [req.user.id],
+    ),
     freezesByHabit(req.user.id),
     freezesLeft(req.user.id),
   ]);
@@ -103,8 +110,8 @@ router.get('/mine', async (req, res) => {
         recent_freezes: frozen.filter((d) => d >= recentStart).sort(),
         // Ids of the last few check-ins, so the dashboard can undo today's.
         latest_checkins: (row.latest_entries ? row.latest_entries.split(',') : []).map((e) => {
-          const [id, date] = e.split(':');
-          return { id: Number(id), checkin_date: date };
+          const [id, date, amount] = e.split(':');
+          return { id: Number(id), checkin_date: date, amount: Number(amount) };
         }),
         week_count: done.filter((d) => schedule.weekIndex(schedule.dayNumber(d)) === thisWeek).length,
       };
@@ -122,13 +129,15 @@ function groupDates(rows) {
 }
 
 router.post('/', validate({ body: schemas.habitCreate }), async (req, res) => {
-  const { title, description, category, is_public, reminder_time } = req.valid.body;
+  const { title, description, category, is_public, reminder_time, target_count, unit } = req.valid.body;
   const { frequency, days_mask, weekly_target } = schedule.toColumns(req.valid.body.schedule);
   // Owner is always the authenticated user, never a value from the request.
   const { lastInsertRowid } = await db.run(
-    `INSERT INTO habits (user_id, title, description, category, is_public, frequency, days_mask, weekly_target, reminder_time)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [req.user.id, title, description, category, is_public ? 1 : 0, frequency, days_mask, weekly_target, reminder_time],
+    `INSERT INTO habits (user_id, title, description, category, is_public, frequency, days_mask, weekly_target,
+                         reminder_time, target_count, unit)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [req.user.id, title, description, category, is_public ? 1 : 0, frequency, days_mask, weekly_target,
+      reminder_time, target_count, unit],
   );
   const row = await db.get(
     'SELECT h.*, u.username AS owner_username FROM habits h JOIN users u ON u.id = h.user_id WHERE h.id = ?',
@@ -150,10 +159,21 @@ router.patch('/:id', authorize('habit', 'update'), validate({ body: schemas.habi
   // Column names come from the strict schema's fixed key set (and toColumns),
   // never from raw input.
   const columns = Object.keys(updates);
-  await db.run(
-    `UPDATE habits SET ${columns.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`,
-    [...columns.map((c) => updates[c]), req.resource.id],
-  );
+  const statements = [
+    [
+      `UPDATE habits SET ${columns.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`,
+      [...columns.map((c) => updates[c]), req.resource.id],
+    ],
+  ];
+  // Raising a target must not turn days that were complete into partial ones.
+  const oldTarget = req.resource.target_count;
+  if (updates.target_count && updates.target_count !== oldTarget) {
+    statements.push([
+      'UPDATE checkins SET amount = MAX(amount, ?) WHERE habit_id = ? AND amount >= ?',
+      [updates.target_count, req.resource.id, oldTarget],
+    ]);
+  }
+  await db.batch(statements);
   const row = await db.get(
     'SELECT h.*, u.username AS owner_username FROM habits h JOIN users u ON u.id = h.user_id WHERE h.id = ?',
     [req.resource.id],
