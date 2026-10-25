@@ -4,10 +4,10 @@
 // every action anyway.
 
 import { api, ApiError } from '../api.js';
-import { el, $, idFromQuery, localISODate, addDays, formatDate, formatTimestamp } from '../dom.js';
+import { el, $, fill, idFromQuery, localISODate, addDays, formatDate, formatTimestamp } from '../dom.js';
 import { initPage, toast, errorMessage, confirmDialog, showFormErrors, clearFormErrors, withBusy } from '../shell.js';
 import { reveal } from '../motion.js';
-import { categoryChip, visibilityLabel, streakBadge, habitDialog, isDue, scheduleLabel, chainCalendar } from '../components.js';
+import { categoryChip, visibilityLabel, streakBadge, habitDialog, isDue, scheduleLabel, chainCalendar, reactionBar } from '../components.js';
 
 const MAX_PHOTO_BYTES = 1024 * 1024;
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -23,6 +23,7 @@ let freezesLeft = 0;
 let chainYear = Number(localISODate().slice(0, 4));
 let year = { done: [], partial: [], frozen: [] };
 let comments = [];
+let reactions = null;
 
 const isOwner = () => habit.owner.id === user.id;
 const isAdmin = () => user.role === 'admin';
@@ -113,6 +114,7 @@ function header() {
         ` · ${scheduleLabel(habit.schedule)}${habit.target_count > 1 ? ` · ${habit.target_count} ${habit.unit} a day` : ''} · since ${formatDate(habit.created_at)}`,
       ),
       habit.description ? el('p', { class: 'description', text: habit.description }) : null,
+      reactions ? reactionBar(habit.id, reactions, habit.is_public && !habit.archived && !isOwner()) : null,
     ),
     ownerTools(),
   );
@@ -470,9 +472,13 @@ function commentSection() {
 
 async function loadComments() {
   if (habit.is_public || isOwner() || isAdmin()) {
-    ({ comments } = await api.get(`/api/habits/${habit.id}/comments`));
+    [{ comments }, reactions] = await Promise.all([
+      api.get(`/api/habits/${habit.id}/comments`),
+      api.get(`/api/habits/${habit.id}/reactions`),
+    ]);
   } else {
     comments = [];
+    reactions = null;
   }
   render();
 }
@@ -522,7 +528,8 @@ function render() {
   document.title = `${habit.title} · Habit Tracker`;
   const canSee = isOwner() || isAdmin();
   const left = canSee ? checkinSection() : el('section', {}, el('div', { class: 'empty' }, el('h2', { text: 'Check-ins are private' }), el('p', { class: 'muted', text: `Only @${habit.owner.username} can see their check-in history.` })));
-  main.replaceChildren(
+  fill(
+    main,
     header(),
     canSee ? el('section', { class: 'section', attrs: { id: 'chain' } }, habitWall()) : null,
     el('div', { class: 'detail section' }, left, commentSection()),

@@ -119,7 +119,8 @@ router.delete('/users/:id/follow', requireAuth, async (req, res) => {
 router.get('/feed', requireAuth, async (req, res) => {
   const rows = await db.all(
     `SELECT ${publicHabitFields},
-            (SELECT COUNT(*) FROM comments c WHERE c.habit_id = h.id) AS comment_count
+            (SELECT COUNT(*) FROM comments c WHERE c.habit_id = h.id) AS comment_count,
+            (SELECT COUNT(*) FROM reactions r WHERE r.habit_id = h.id) AS reaction_count
        FROM follows f
        JOIN habits h ON h.user_id = f.followee_id
        JOIN users u ON u.id = h.user_id
@@ -128,7 +129,9 @@ router.get('/feed', requireAuth, async (req, res) => {
       LIMIT ?`,
     [req.user.id, FEED_LIMIT],
   );
-  res.json({ habits: rows.map((r) => ({ ...serializePublicHabit(r), comment_count: r.comment_count })) });
+  res.json({
+    habits: rows.map((r) => ({ ...serializePublicHabit(r), comment_count: r.comment_count, reaction_count: r.reaction_count })),
+  });
 });
 
 module.exports = router;

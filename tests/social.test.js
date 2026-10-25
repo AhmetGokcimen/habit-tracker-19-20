@@ -79,3 +79,62 @@ describe('F11 — following and feed', () => {
     assert.equal((await request(app).get('/api/nope')).status, 404);
   });
 });
+
+describe('F12 — reactions', () => {
+  let shared;
+  before(async () => {
+    shared = (await bob.get('/api/habits/mine')).body.habits.find((h) => h.is_public);
+  });
+
+  test('react, count, un-react; only counts are returned', async () => {
+    let res = await alice.put(`/api/habits/${shared.id}/reactions/clap`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body, { counts: { clap: 1, fire: 0, muscle: 0 }, mine: ['clap'] });
+    await alice.put(`/api/habits/${shared.id}/reactions/clap`); // idempotent
+    await carol.put(`/api/habits/${shared.id}/reactions/clap`);
+
+    res = await bob.get(`/api/habits/${shared.id}/reactions`);
+    assert.deepEqual(res.body, { counts: { clap: 2, fire: 0, muscle: 0 }, mine: [] });
+    assert.ok(!JSON.stringify(res.body).includes('alice'));
+
+    const search = (await carol.get('/api/habits?q=Bob%20shares')).body.habits[0];
+    assert.equal(search.reaction_count, 2);
+
+    res = await alice.delete(`/api/habits/${shared.id}/reactions/clap`);
+    assert.deepEqual(res.body.counts.clap, 1);
+  });
+
+  test('no reactions on private, own or unknown kinds', async () => {
+    const priv = (await bob.get('/api/habits/mine')).body.habits.find((h) => !h.is_public);
+    assert.equal((await alice.put(`/api/habits/${priv.id}/reactions/fire`)).status, 403);
+    assert.equal((await bob.put(`/api/habits/${shared.id}/reactions/fire`)).status, 403);
+    assert.equal((await alice.put(`/api/habits/${shared.id}/reactions/heart`)).status, 404);
+    assert.equal((await alice.put(`/api/habits/${shared.id}/reactions/__proto__`)).status, 404);
+    assert.equal((await alice.raw.put(`/api/habits/${shared.id}/reactions/fire`)).status, 403); // CSRF header
+  });
+});
+
+describe('deleting a user removes their social data everywhere', () => {
+  test('no orphaned follows, reactions or freezes remain', async () => {
+    const { db } = require('./helpers');
+    const goneId = await createUser('leaver');
+    await createUser('boss', 'admin');
+    const leaver = await loginAs(app, 'leaver');
+    const boss = await loginAs(app, 'boss');
+    const h = (await leaver.post('/api/habits').send({ title: 'Leaver shares', category: 'other', is_public: true })).body.habit;
+    await leaver.put(`/api/users/${bobId}/follow`);
+    await carol.put(`/api/users/${goneId}/follow`);
+    await carol.put(`/api/habits/${h.id}/reactions/fire`);
+    const shared = (await bob.get('/api/habits/mine')).body.habits.find((x) => x.is_public);
+    await leaver.put(`/api/habits/${shared.id}/reactions/muscle`);
+
+    assert.equal((await boss.delete(`/api/admin/users/${goneId}`)).status, 204);
+    const left = await db.get(
+      `SELECT (SELECT COUNT(*) FROM follows WHERE follower_id = ?1 OR followee_id = ?1) AS f,
+              (SELECT COUNT(*) FROM reactions WHERE user_id = ?1 OR habit_id = ?2) AS r,
+              (SELECT COUNT(*) FROM streak_freezes WHERE user_id = ?1) AS z`,
+      [goneId, h.id],
+    );
+    assert.deepEqual({ ...left }, { f: 0, r: 0, z: 0 });
+  });
+});

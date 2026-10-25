@@ -1,7 +1,7 @@
 // "Today": the signed-in user's own habits, today's tally and quick check-in.
 
 import { api, ApiError } from '../api.js';
-import { el, $, localISODate, addDays, formatShortDate, formatDate } from '../dom.js';
+import { el, $, fill, localISODate, addDays, formatShortDate, formatDate } from '../dom.js';
 import { initPage, toast, errorMessage } from '../shell.js';
 import { reveal } from '../motion.js';
 import { createMascot } from '../mascot.js';
@@ -358,7 +358,8 @@ function render() {
   const showArchived = el('button', { class: 'btn btn-ghost btn-sm', text: archivedList ? 'Hide archived' : 'Archived', attrs: { type: 'button' } });
   showArchived.addEventListener('click', toggleArchived);
 
-  main.replaceChildren(
+  fill(
+    main,
     head,
     el(
       'section',

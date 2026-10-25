@@ -2193,3 +2193,36 @@ textarea {
   font-size: var(--step--1);
   text-decoration: none;
 }
+
+.reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-4);
+}
+
+.reaction {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s-1);
+  padding: var(--s-1) var(--s-3);
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--ink);
+  font: inherit;
+}
+
+button.reaction {
+  cursor: pointer;
+  transition: transform var(--t-fast) var(--ease-spring);
+}
+
+button.reaction:hover {
+  transform: translateY(-1px);
+}
+
+.reaction.is-mine {
+  border-color: var(--coral);
+  background: #ffe9e2;
+}

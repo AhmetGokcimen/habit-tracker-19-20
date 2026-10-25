@@ -38,6 +38,7 @@ function serializeHabit(row, viewer = null) {
     archived: row.archived_at !== null && row.archived_at !== undefined,
     ...(viewer && viewer.id === row.user_id && { reminder_time: row.reminder_time ?? null }),
     ...(row.comment_count !== undefined && { comment_count: row.comment_count }),
+    ...(row.reaction_count !== undefined && { reaction_count: row.reaction_count }),
     ...(row.checkin_count !== undefined && { checkin_count: row.checkin_count }),
     ...(row.last_checkin !== undefined && { last_checkin: row.last_checkin }),
     ...(row.recent_dates !== undefined && { recent_checkins: row.recent_dates ? row.recent_dates.split(',').sort() : [] }),
@@ -54,7 +55,8 @@ router.get('/', validate({ query: schemas.habitSearch }), async (req, res) => {
 
   const rows = await db.all(
     `SELECT h.*, u.username AS owner_username,
-            (SELECT COUNT(*) FROM comments c WHERE c.habit_id = h.id) AS comment_count
+            (SELECT COUNT(*) FROM comments c WHERE c.habit_id = h.id) AS comment_count,
+            (SELECT COUNT(*) FROM reactions r WHERE r.habit_id = h.id) AS reaction_count
        FROM habits h JOIN users u ON u.id = h.user_id
       WHERE h.is_public = 1 AND h.archived_at IS NULL
         AND (?1 IS NULL OR h.category = ?1)
@@ -210,6 +212,7 @@ router.delete('/:id', authorize('habit', 'delete'), async (req, res) => {
     ...moderationAudit(req.user, user_id, 'habit.delete', 'habit', id, { owner_id: user_id, title }),
     ['DELETE FROM comments WHERE habit_id = ?', [id]],
     ['DELETE FROM streak_freezes WHERE habit_id = ?', [id]],
+    ['DELETE FROM reactions WHERE habit_id = ?', [id]],
     ['DELETE FROM checkins WHERE habit_id = ?', [id]],
     ['DELETE FROM habits WHERE id = ?', [id]],
   ]);

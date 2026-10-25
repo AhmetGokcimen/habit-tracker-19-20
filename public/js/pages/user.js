@@ -2,7 +2,7 @@
 // Only public data is shown; the server returns 404 for people who share nothing.
 
 import { api, ApiError } from '../api.js';
-import { el, $, idFromQuery, formatDate } from '../dom.js';
+import { el, $, fill, idFromQuery, formatDate } from '../dom.js';
 import { initPage, toast, errorMessage, withBusy } from '../shell.js';
 import { reveal } from '../motion.js';
 import { categoryChip } from '../components.js';
@@ -42,7 +42,8 @@ function render(data) {
     );
   }
   const followers = data.follower_count === 1 ? '1 follower' : `${data.follower_count} followers`;
-  main.replaceChildren(
+  fill(
+    main,
     el(
       'header',
       { class: 'page-head' },

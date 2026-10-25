@@ -57,7 +57,10 @@ function renderChips() {
 }
 
 function resultCard(habit) {
-  const comments = habit.comment_count === 1 ? '1 comment' : `${habit.comment_count} comments`;
+  const comments = [
+    habit.comment_count === 1 ? '1 comment' : `${habit.comment_count} comments`,
+    habit.reaction_count ? `${habit.reaction_count} cheer${habit.reaction_count === 1 ? '' : 's'}` : null,
+  ].filter(Boolean).join(' · ');
   return el(
     'article',
     { class: 'card tilt habit-card' },

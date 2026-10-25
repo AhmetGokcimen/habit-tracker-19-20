@@ -130,6 +130,15 @@ CREATE TABLE IF NOT EXISTS comments (
 );
 CREATE INDEX IF NOT EXISTS idx_comments_habit ON comments(habit_id);
 
+-- One-tap reactions on shared habits (F12). Only counts are ever returned.
+CREATE TABLE IF NOT EXISTS reactions (
+  habit_id   INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind       TEXT    NOT NULL CHECK (kind IN ('clap', 'fire', 'muscle')),
+  created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (habit_id, user_id, kind)
+);
+
 -- Following (F11). Grants no access: the feed only shows public habits.
 CREATE TABLE IF NOT EXISTS follows (
   follower_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

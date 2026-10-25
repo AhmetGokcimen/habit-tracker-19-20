@@ -400,3 +400,40 @@ export function chainCalendar({ year, states, onYear, minYear = 2000 }) {
     legend,
   );
 }
+
+// ---- reactions ----------------------------------------------------------------------
+
+export const REACTIONS = [
+  ['clap', '👏', 'Applause'],
+  ['fire', '🔥', 'On fire'],
+  ['muscle', '💪', 'Strong'],
+];
+
+/** Reaction buttons for a shared habit; read-only counts when canReact is false. */
+export function reactionBar(habitId, summary, canReact) {
+  const bar = el('div', { class: 'reactions', attrs: { role: 'group', 'aria-label': 'Reactions' } });
+  const draw = (data) => {
+    bar.replaceChildren(
+      ...REACTIONS.map(([kind, icon, label]) => {
+        const mine = data.mine.includes(kind);
+        const count = data.counts[kind] ?? 0;
+        if (!canReact) {
+          return el('span', { class: 'reaction', attrs: { title: label } }, el('span', { text: icon, attrs: { 'aria-hidden': 'true' } }), el('span', { class: 'mono', text: String(count), attrs: { 'aria-label': `${label}: ${count}` } }));
+        }
+        const b = el('button', { class: `reaction${mine ? ' is-mine' : ''}`, attrs: { type: 'button', 'aria-pressed': String(mine), 'aria-label': `${label} (${count})`, title: label } }, el('span', { text: icon, attrs: { 'aria-hidden': 'true' } }), el('span', { class: 'mono', text: String(count) }));
+        b.addEventListener('click', async () => {
+          b.disabled = true;
+          try {
+            const path = `/api/habits/${habitId}/reactions/${kind}`;
+            draw(mine ? await api.del(path) : await api.put(path));
+          } catch {
+            b.disabled = false;
+          }
+        });
+        return b;
+      }),
+    );
+  };
+  draw(summary);
+  return bar;
+}
