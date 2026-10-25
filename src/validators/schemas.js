@@ -205,6 +205,31 @@ const exportQuery = z.strictObject({
   format: z.enum(['json', 'csv'], 'Format must be json or csv').default('json'),
 });
 
+// Admin-created challenges: at most a year long.
+const challengeCreate = z
+  .strictObject({
+    title: habitFields.title,
+    description: habitFields.description.default(''),
+    category: habitFields.category,
+    start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+    end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Date must be YYYY-MM-DD'),
+  })
+  .refine((c) => [c.start_date, c.end_date].every((d) => {
+    const t = new Date(`${d}T00:00:00Z`);
+    return !Number.isNaN(t.getTime()) && t.toISOString().slice(0, 10) === d && d >= '2000-01-01';
+  }), { message: 'Not a valid calendar date', path: ['start_date'] })
+  .refine((c) => c.end_date >= c.start_date, { message: 'End must not be before start', path: ['end_date'] })
+  .refine(
+    (c) => Date.parse(`${c.end_date}T00:00:00Z`) - Date.parse(`${c.start_date}T00:00:00Z`) <= 365 * 24 * 60 * 60 * 1000,
+    { message: 'A challenge can last at most a year', path: ['end_date'] },
+  );
+
+// Joining is explicit consent to show your completed-day count to others.
+const challengeJoin = z.strictObject({
+  habit_id: z.number().int().min(1).max(9_999_999_999),
+  share_progress: z.literal(true, 'Joining shares your completed-day count; tick the box to agree'),
+});
+
 const roleUpdate = z.strictObject({
   role: z.enum(['user', 'admin'], 'Role must be "user" or "admin"'),
 });
@@ -228,4 +253,6 @@ module.exports = {
   statsQuery,
   chainQuery,
   exportQuery,
+  challengeCreate,
+  challengeJoin,
 };

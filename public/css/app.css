@@ -2226,3 +2226,15 @@ button.reaction:hover {
   border-color: var(--coral);
   background: #ffe9e2;
 }
+
+/* ---------- Challenges ---------- */
+
+.challenge-card.is-ended {
+  opacity: 0.7;
+}
+
+.leaderboard tr.is-me th,
+.leaderboard tr.is-me td {
+  background: #fff3cf;
+  font-weight: 700;
+}

@@ -48,6 +48,16 @@ const SEED_TARGETS = {
   'Read 20 pages': [20, 'pages'],
 };
 
+// [title, description, category, starts N days ago, length in days, created by, [[member, habit title]]]
+const SEED_CHALLENGES = [
+  ['Move every day in October', 'Any movement counts: a run, push-ups, a walk.', 'fitness', 20, 31, 'admin', [
+    ['alice', 'Morning run'],
+    ['bob', 'Push-ups'],
+    ['carol', 'Stretch before bed'],
+  ]],
+  ['Read more', 'Pages, chapters, articles — read a little every day.', 'learning', 5, 30, 'moderator', [['alice', 'Read 20 pages']]],
+];
+
 const CHECKIN_NOTES = [
   'Felt great today.',
   'Hard to start, glad I did it.',
@@ -78,4 +88,4 @@ const SEED_COMMENTS = [
   ['Stretch before bed', 'moderator', 'Good for sleep, I can confirm.'],
 ];
 
-module.exports = { SEED_ACCOUNTS, SEED_HABITS, SEED_TARGETS, CHECKIN_NOTES, SEED_COMMENTS };
+module.exports = { SEED_ACCOUNTS, SEED_HABITS, SEED_TARGETS, SEED_CHALLENGES, CHECKIN_NOTES, SEED_COMMENTS };

@@ -3,8 +3,9 @@
 // calls answers 403 unless the database says the caller is an admin.
 
 import { api, ApiError } from '../api.js';
-import { el, $, formatDate, formatTimestamp } from '../dom.js';
-import { initPage, toast, errorMessage, confirmDialog } from '../shell.js';
+import { el, $, formatDate, formatTimestamp, localISODate, addDays } from '../dom.js';
+import { initPage, toast, errorMessage, confirmDialog, showFormErrors, clearFormErrors, withBusy } from '../shell.js';
+import { CATEGORIES } from '../components.js';
 import { reveal } from '../motion.js';
 
 const main = $('#main');
@@ -138,11 +139,81 @@ function auditList(entries) {
   );
 }
 
+// ---- challenges (F13) -------------------------------------------------------------
+
+function challengeForm() {
+  const input = (id, name, type, extra = {}) => el('input', { class: 'input', attrs: { id, name, type, required: true, ...extra } });
+  const title = input('ch-title', 'title', 'text', { maxlength: 100 });
+  const description = el('textarea', { class: 'textarea', attrs: { id: 'ch-desc', name: 'description', maxlength: 1000 } });
+  const category = el('select', { class: 'select', attrs: { id: 'ch-cat', name: 'category' } }, CATEGORIES.map((c) => el('option', { text: c, attrs: { value: c } })));
+  const start = input('ch-start', 'start_date', 'date');
+  const end = input('ch-end', 'end_date', 'date');
+  start.value = localISODate();
+  end.value = addDays(localISODate(), 29);
+  const submit = el('button', { class: 'btn btn-primary', text: 'Create challenge', attrs: { type: 'submit' } });
+  const field = (name, label, control) => el('div', { class: 'field', dataset: { field: name } }, el('label', { text: label, attrs: { for: control.id } }), control);
+  const form = el(
+    'form',
+    { class: 'form card', attrs: { novalidate: true } },
+    el('h3', { text: 'New challenge' }),
+    field('title', 'Title', title),
+    field('description', 'Description', description),
+    field('category', 'Category', category),
+    el('div', { class: 'target-row' }, field('start_date', 'Starts', start), field('end_date', 'Ends', end)),
+    submit,
+  );
+  form.addEventListener('submit', async (event) => {
+    event.preventDefault();
+    clearFormErrors(form);
+    if (!form.reportValidity()) return;
+    await withBusy(submit, async () => {
+      try {
+        await api.post('/api/admin/challenges', {
+          title: title.value.trim(),
+          description: description.value.trim(),
+          category: category.value,
+          start_date: start.value,
+          end_date: end.value,
+        });
+        toast('Challenge created');
+        await load();
+      } catch (err) {
+        showFormErrors(form, err);
+      }
+    });
+  });
+  return form;
+}
+
+function challengeList(challenges) {
+  if (!challenges.length) return el('p', { class: 'muted', text: 'No current challenges.' });
+  return el(
+    'ul',
+    { class: 'archived-list' },
+    challenges.map((c) => {
+      const del = el('button', { class: 'btn btn-danger btn-sm', text: 'Delete', attrs: { type: 'button', 'aria-label': `Delete challenge ${c.title}` } });
+      del.addEventListener('click', async () => {
+        const ok = await confirmDialog({ title: 'Delete this challenge?', message: `“${c.title}” and its leaderboard will be removed for everyone. Members keep their habits.`, confirmLabel: 'Delete challenge' });
+        if (!ok) return;
+        try {
+          await api.del(`/api/admin/challenges/${c.id}`);
+          toast('Challenge deleted');
+          await load();
+        } catch (err) {
+          toast(errorMessage(err), { error: true });
+        }
+      });
+      return el('li', {}, el('a', { text: c.title, attrs: { href: `/challenges.html?id=${c.id}` } }), el('span', { class: 'mono muted', text: `${formatDate(c.start_date)} – ${formatDate(c.end_date)} · ${c.member_count} members` }), del);
+    }),
+  );
+}
+
 async function load() {
-  const [stats, { users }, { entries }] = await Promise.all([
+  const [stats, { users }, { entries }, { challenges }] = await Promise.all([
     api.get('/api/admin/stats'),
     api.get('/api/admin/users'),
     api.get('/api/admin/audit-log'),
+    api.get('/api/challenges'),
   ]);
 
   main.replaceChildren(
@@ -153,6 +224,12 @@ async function load() {
     ),
     ledger(stats.totals),
     el('section', { class: 'section' }, el('div', { class: 'section-head' }, el('h2', { text: 'Users' }), el('span', { class: 'mono muted', text: `${users.length} accounts` })), usersTable(users)),
+    el(
+      'section',
+      { class: 'section' },
+      el('div', { class: 'section-head' }, el('h2', { text: 'Challenges' }), el('span', { class: 'mono muted', text: `${challenges.length} current` })),
+      el('div', { class: 'profile-grid' }, challengeList(challenges), challengeForm()),
+    ),
     el('section', { class: 'section' }, el('div', { class: 'section-head' }, el('h2', { text: 'Audit log' }), el('span', { class: 'mono muted', text: 'append-only' })), auditList(entries)),
   );
 }

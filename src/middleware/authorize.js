@@ -43,6 +43,7 @@ const loaders = {
       [id],
     ),
   user: (id) => db.get('SELECT id, username, email, role, created_at FROM users WHERE id = ?', [id]),
+  challenge: (id) => db.get('SELECT * FROM challenges WHERE id = ?', [id]),
 };
 
 // policies[resource][action](user, record) -> boolean
@@ -81,6 +82,11 @@ const policies = {
   },
   user: {
     read: (u, target) => u.id === target.id || isAdmin(u),
+  },
+  challenge: {
+    // Any signed-in user may see, join or leave a challenge.
+    read: () => true,
+    delete: (u) => isAdmin(u),
   },
 };
 

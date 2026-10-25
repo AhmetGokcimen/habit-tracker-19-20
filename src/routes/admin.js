@@ -80,6 +80,7 @@ router.delete('/users/:id', authorize('user', 'read'), async (req, res) => {
       }),
       ['DELETE FROM comments WHERE user_id = ? OR habit_id IN (SELECT id FROM habits WHERE user_id = ?)', [id, id]],
       ['DELETE FROM reactions WHERE user_id = ? OR habit_id IN (SELECT id FROM habits WHERE user_id = ?)', [id, id]],
+      ['DELETE FROM challenge_members WHERE user_id = ? OR habit_id IN (SELECT id FROM habits WHERE user_id = ?)', [id, id]],
       ['DELETE FROM streak_freezes WHERE user_id = ?', [id]],
       ['DELETE FROM checkins WHERE user_id = ?', [id]],
       ['DELETE FROM habits WHERE user_id = ?', [id]],
@@ -89,6 +90,36 @@ router.delete('/users/:id', authorize('user', 'read'), async (req, res) => {
       ['DELETE FROM users WHERE id = ?', [id]],
     ]),
   );
+  res.status(204).end();
+});
+
+// ---- challenges (F13) ---------------------------------------------------------
+
+router.post('/challenges', validate({ body: schemas.challengeCreate }), async (req, res) => {
+  const { title, description, category, start_date, end_date } = req.valid.body;
+  // The audit entry is written in the same atomic batch, right after the
+  // insert, and records the new challenge's id via last_insert_rowid().
+  const [inserted] = await db.batch([
+    [
+      'INSERT INTO challenges (title, description, category, start_date, end_date, created_by) VALUES (?, ?, ?, ?, ?, ?)',
+      [title, description, category, start_date, end_date, req.user.id],
+    ],
+    [
+      `INSERT INTO admin_audit_log (actor_id, actor_username, action, target_type, target_id, details)
+       VALUES (?, ?, 'challenge.create', 'challenge', last_insert_rowid(), ?)`,
+      [req.user.id, req.user.username, JSON.stringify({ title, start_date, end_date })],
+    ],
+  ]);
+  res.status(201).json({ challenge: { id: Number(inserted.lastInsertRowid), title, description, category, start_date, end_date } });
+});
+
+router.delete('/challenges/:id', authorize('challenge', 'delete'), async (req, res) => {
+  const ch = req.resource;
+  await db.batch([
+    auditStatement(req.user, 'challenge.delete', 'challenge', ch.id, { title: ch.title }),
+    ['DELETE FROM challenge_members WHERE challenge_id = ?', [ch.id]],
+    ['DELETE FROM challenges WHERE id = ?', [ch.id]],
+  ]);
   res.status(204).end();
 });
 

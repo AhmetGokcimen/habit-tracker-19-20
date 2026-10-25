@@ -20,9 +20,9 @@ const config = require('../src/config');
 const db = require('../src/db');
 const { hashPassword } = require('../src/services/authService');
 const schedule = require('../src/services/schedule');
-const { SEED_ACCOUNTS, SEED_HABITS, SEED_TARGETS, CHECKIN_NOTES, SEED_COMMENTS } = require('./seed-data');
+const { SEED_ACCOUNTS, SEED_HABITS, SEED_TARGETS, SEED_CHALLENGES, CHECKIN_NOTES, SEED_COMMENTS } = require('./seed-data');
 
-const DROP_ORDER = ['follows', 'comments', 'streak_freezes', 'checkins', 'habits', 'sessions', 'rate_limits', 'rate_limit_windows', 'admin_audit_log', 'users'];
+const DROP_ORDER = ['challenge_members', 'challenges', 'reactions', 'follows', 'comments', 'streak_freezes', 'checkins', 'habits', 'sessions', 'rate_limits', 'rate_limit_windows', 'admin_audit_log', 'users'];
 const PHOTO_EVERY_NTH_HABIT = 4;
 
 // 24 characters from a 58-symbol alphabet without look-alikes (~140 bits).
@@ -158,6 +158,21 @@ async function main() {
       "INSERT INTO comments (habit_id, user_id, body, created_at) VALUES (?, ?, ?, datetime('now', ?))",
       [habitIds.get(title), userIds.get(author), body, `-${1 + Math.floor(rand() * 20)} days`],
     ]);
+  }
+
+  // 5. Challenges with members (who consented by joining).
+  for (const [i, [title, description, category, startedAgo, length, creator, members]] of SEED_CHALLENGES.entries()) {
+    const id = i + 1;
+    statements.push([
+      'INSERT INTO challenges (id, title, description, category, start_date, end_date, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, title, description, category, isoDaysAgo(startedAgo), isoDaysAgo(startedAgo - length + 1), userIds.get(creator)],
+    ]);
+    for (const [member, habitTitle] of members) {
+      statements.push([
+        'INSERT INTO challenge_members (challenge_id, user_id, habit_id) VALUES (?, ?, ?)',
+        [id, userIds.get(member), habitIds.get(habitTitle)],
+      ]);
+    }
   }
 
   await db.batch(statements);

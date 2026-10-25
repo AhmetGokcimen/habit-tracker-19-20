@@ -213,6 +213,7 @@ router.delete('/:id', authorize('habit', 'delete'), async (req, res) => {
     ['DELETE FROM comments WHERE habit_id = ?', [id]],
     ['DELETE FROM streak_freezes WHERE habit_id = ?', [id]],
     ['DELETE FROM reactions WHERE habit_id = ?', [id]],
+    ['DELETE FROM challenge_members WHERE habit_id = ?', [id]],
     ['DELETE FROM checkins WHERE habit_id = ?', [id]],
     ['DELETE FROM habits WHERE id = ?', [id]],
   ]);

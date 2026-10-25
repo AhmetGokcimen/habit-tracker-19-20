@@ -23,6 +23,7 @@ export function brandMark() {
 const NAV = [
   { href: '/', label: 'Today', key: 'today' },
   { href: '/stats.html', label: 'Stats', key: 'stats' },
+  { href: '/challenges.html', label: 'Challenges', key: 'challenges' },
   { href: '/explore.html', label: 'Explore', key: 'explore' },
   { href: '/profile.html', label: 'Profile', key: 'profile' },
 ];

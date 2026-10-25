@@ -149,6 +149,36 @@ CREATE TABLE IF NOT EXISTS follows (
 );
 CREATE INDEX IF NOT EXISTS idx_follows_followee ON follows(followee_id);
 
+-- Group challenges (F13). Created by admins only; joining shares the number
+-- of completed days of ONE of the member's own habits with other users.
+CREATE TABLE IF NOT EXISTS challenges (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  title       TEXT    NOT NULL CHECK (length(title) BETWEEN 1 AND 100),
+  description TEXT    NOT NULL DEFAULT '' CHECK (length(description) <= 1000),
+  category    TEXT    NOT NULL CHECK (category IN ('health', 'fitness', 'learning', 'productivity', 'mindfulness', 'social', 'other')),
+  start_date  TEXT    NOT NULL CHECK (start_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  end_date    TEXT    NOT NULL CHECK (end_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+  CHECK (end_date >= start_date)
+);
+
+CREATE TABLE IF NOT EXISTS challenge_members (
+  challenge_id INTEGER NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  habit_id     INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+  joined_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (challenge_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_challenge_members_habit ON challenge_members(habit_id);
+
+CREATE TRIGGER IF NOT EXISTS challenge_member_owns_habit
+BEFORE INSERT ON challenge_members
+WHEN NEW.user_id IS NOT (SELECT user_id FROM habits WHERE id = NEW.habit_id)
+BEGIN
+  SELECT RAISE(ABORT, 'challenge habit must belong to the member');
+END;
+
 -- The system can never be left without an administrator. Writes are
 -- serialized by SQLite, so this also holds when two admins act concurrently.
 CREATE TRIGGER IF NOT EXISTS users_keep_last_admin_on_update

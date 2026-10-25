@@ -17,6 +17,7 @@ const userRoutes = require('./routes/users');
 const freezeRoutes = require('./routes/freezes');
 const socialRoutes = require('./routes/social');
 const reactionRoutes = require('./routes/reactions');
+const challengeRoutes = require('./routes/challenges');
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -72,6 +73,7 @@ function createApp() {
   api.use('/comments', commentRoutes.comments);
   api.use('/', socialRoutes);
   api.use('/users', userRoutes);
+  api.use('/challenges', challengeRoutes);
   api.use('/admin', adminRoutes);
   api.use(notFoundHandler);
   app.use('/api', api);
