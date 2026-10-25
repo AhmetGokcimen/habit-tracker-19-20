@@ -19,6 +19,21 @@
   --success: #23816f;
   --danger: #b8322a;
 
+  /* Tints and surfaces (redefined for dark mode below) */
+  --on-ink: #f4fbf9;         /* text on ink-filled controls */
+  --ink-deep: #051516;
+  --topbar-bg: rgba(230, 239, 236, 0.82);
+  --card-glass: rgba(251, 253, 252, 0.6);
+  --row-hover: #f3f8f6;
+  --warm-tint: var(--warm-tint);
+  --warm-line: var(--warm-line);
+  --yellow-tint: var(--yellow-tint);
+  --danger-tint: #fbe4e1;
+  --danger-line: #e5b9b4;
+  --ice: var(--ice);
+  --ice-line: var(--ice-line);
+  --ice-ink: var(--ice-ink);
+
   /* Type */
   --font-display: 'Bricolage Grotesque Variable', 'Segoe UI', system-ui, sans-serif;
   --font-body: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
@@ -213,7 +228,7 @@ textarea {
   top: 0;
   z-index: 20;
   backdrop-filter: blur(10px);
-  background: rgba(230, 239, 236, 0.82);
+  background: var(--topbar-bg);
   border-bottom: 1px solid var(--line);
 }
 
@@ -418,8 +433,8 @@ textarea {
 
 .btn-primary {
   --btn-bg: var(--ink);
-  --btn-fg: #f4fbf9;
-  --btn-border: #051516;
+  --btn-fg: var(--on-ink);
+  --btn-border: var(--ink-deep);
 }
 
 .btn-accent {
@@ -442,7 +457,7 @@ textarea {
 .btn-danger {
   --btn-bg: var(--card);
   --btn-fg: var(--danger);
-  --btn-border: #e5b9b4;
+  --btn-border: var(--danger-line);
 }
 
 .btn-sm {
@@ -525,7 +540,7 @@ textarea {
 .form-error {
   padding: var(--s-3) var(--s-4);
   border-radius: var(--radius-sm);
-  background: #fbe4e1;
+  background: var(--danger-tint);
   color: var(--danger);
   font-weight: 700;
 }
@@ -639,7 +654,7 @@ textarea {
 
 .file-drop:hover {
   border-color: var(--coral-deep);
-  background: #fff4ef;
+  background: var(--warm-tint);
 }
 
 .file-drop input {
@@ -835,7 +850,7 @@ textarea {
 }
 
 .chain .day.is-today:not(.is-done) {
-  background: repeating-linear-gradient(-45deg, var(--paper), var(--paper) 3px, #fff3cf 3px, #fff3cf 6px);
+  background: repeating-linear-gradient(-45deg, var(--paper), var(--paper) 3px, var(--yellow-tint) 3px, var(--yellow-tint) 6px);
 }
 
 .tilt:hover .chain .day.is-done {
@@ -936,7 +951,7 @@ textarea {
   padding: var(--s-6);
   border: 2px dashed var(--line);
   border-radius: var(--radius);
-  background: rgba(251, 253, 252, 0.6);
+  background: var(--card-glass);
 }
 
 /* ---------- Explore ---------- */
@@ -972,7 +987,7 @@ textarea {
 
 .chip-toggle[aria-pressed='true'] {
   background: var(--ink);
-  color: #f4fbf9;
+  color: var(--on-ink);
   border-color: var(--ink);
 }
 
@@ -1056,8 +1071,8 @@ textarea {
 
 .heatmap .day.is-frozen,
 .chain .day.is-frozen {
-  background: #bfe3f2;
-  border-color: #5aa9c9;
+  background: var(--ice);
+  border-color: var(--ice-line);
 }
 
 .freeze-panel {
@@ -1077,7 +1092,7 @@ textarea {
 }
 
 .freeze-btn {
-  color: #1f6f8f;
+  color: var(--ice-ink);
 }
 
 .heatmap .day.is-future {
@@ -1154,8 +1169,8 @@ textarea {
 
 .comment.is-mine {
   border-radius: var(--radius-sm) var(--radius-sm) 2px var(--radius-sm);
-  background: #fff6ec;
-  border-color: #f2cfb4;
+  background: var(--warm-tint);
+  border-color: var(--warm-line);
 }
 
 .comment-head {
@@ -1362,7 +1377,7 @@ textarea {
 }
 
 .table tbody tr:hover {
-  background: #f3f8f6;
+  background: var(--row-hover);
 }
 
 .table .select {
@@ -1440,7 +1455,7 @@ textarea {
   padding: var(--s-3) var(--s-5);
   border-radius: var(--radius-sm);
   background: var(--ink);
-  color: #f4fbf9;
+  color: var(--on-ink);
   font-weight: 700;
   box-shadow: var(--shadow-2);
   animation: toast-in 320ms var(--ease-spring) both;
@@ -1525,8 +1540,11 @@ textarea {
   display: grid;
   place-items: center;
   padding: var(--s-7);
+  /* Always dark, in both themes: pin the tokens used inside the panel. */
+  --ink: #0f2b2c;
+  --on-ink: #f4fbf9;
   background: var(--ink);
-  color: #f4fbf9;
+  color: var(--on-ink);
 }
 
 /* parallax tally marks floating behind the mascot */
@@ -1550,7 +1568,7 @@ textarea {
 
 .auth-stage .stage-copy h1 {
   font-size: var(--step-3);
-  color: #f4fbf9;
+  color: var(--on-ink);
 }
 
 .auth-stage .stage-copy p {
@@ -1980,8 +1998,8 @@ textarea {
 }
 
 .wall-cell.is-frozen {
-  background: #bfe3f2;
-  border-color: #5aa9c9;
+  background: var(--ice);
+  border-color: var(--ice-line);
 }
 
 /* The big red X: two hand-drawn strokes, slightly tilted per day. */
@@ -2224,7 +2242,7 @@ button.reaction:hover {
 
 .reaction.is-mine {
   border-color: var(--coral);
-  background: #ffe9e2;
+  background: var(--warm-tint);
 }
 
 /* ---------- Challenges ---------- */
@@ -2235,6 +2253,76 @@ button.reaction:hover {
 
 .leaderboard tr.is-me th,
 .leaderboard tr.is-me td {
-  background: #fff3cf;
+  background: var(--yellow-tint);
   font-weight: 700;
+}
+
+/* ---------- Dark theme ----------
+   Follows the system setting unless the user picked a theme in the top bar
+   (stored per browser, applied early by js/theme.js). */
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --paper: #0e1919;
+    --paper-deep: #091212;
+    --card: #162425;
+    --ink: #e3eeeb;
+    --ink-soft: #9db6b1;
+    --line: #2b3e3e;
+    --coral: #ff6d4d;
+    --coral-deep: #ff8f73;
+    --marigold: #ffcd57;
+    --success: #4cc3a8;
+    --danger: #ff7a70;
+    --on-ink: #0e1919;
+    --ink-deep: #ffffff;
+    --topbar-bg: rgba(14, 25, 25, 0.84);
+    --card-glass: rgba(22, 36, 37, 0.6);
+    --row-hover: #1c2d2e;
+    --warm-tint: #33231d;
+    --warm-line: #6b4632;
+    --yellow-tint: #3a3220;
+    --danger-tint: #3b1f1d;
+    --danger-line: #7a3a35;
+    --ice: #1d3b48;
+    --ice-line: #4f9bbb;
+    --ice-ink: #8fd0ec;
+    --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.35);
+    --shadow-2: 0 2px 0 rgba(0, 0, 0, 0.3), 0 14px 32px -12px rgba(0, 0, 0, 0.7);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --paper: #0e1919;
+  --paper-deep: #091212;
+  --card: #162425;
+  --ink: #e3eeeb;
+  --ink-soft: #9db6b1;
+  --line: #2b3e3e;
+  --coral: #ff6d4d;
+  --coral-deep: #ff8f73;
+  --marigold: #ffcd57;
+  --success: #4cc3a8;
+  --danger: #ff7a70;
+  --on-ink: #0e1919;
+  --ink-deep: #ffffff;
+  --topbar-bg: rgba(14, 25, 25, 0.84);
+  --card-glass: rgba(22, 36, 37, 0.6);
+  --row-hover: #1c2d2e;
+  --warm-tint: #33231d;
+  --warm-line: #6b4632;
+  --yellow-tint: #3a3220;
+  --danger-tint: #3b1f1d;
+  --danger-line: #7a3a35;
+  --ice: #1d3b48;
+  --ice-line: #4f9bbb;
+  --ice-ink: #8fd0ec;
+  --shadow-1: 0 1px 0 rgba(0, 0, 0, 0.35), 0 2px 6px rgba(0, 0, 0, 0.35);
+  --shadow-2: 0 2px 0 rgba(0, 0, 0, 0.3), 0 14px 32px -12px rgba(0, 0, 0, 0.7);
+  color-scheme: dark;
+}
+
+.theme-toggle {
+  min-width: 2.4rem;
 }

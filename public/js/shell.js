@@ -28,6 +28,47 @@ const NAV = [
   { href: '/profile.html', label: 'Profile', key: 'profile' },
 ];
 
+// ---- theme (system / light / dark), applied early by js/theme.js ----------
+
+const THEMES = [
+  ['system', '◐', 'Theme: follows your system'],
+  ['light', '☀', 'Theme: light'],
+  ['dark', '☾', 'Theme: dark'],
+];
+
+function currentTheme() {
+  try {
+    const t = localStorage.getItem('theme');
+    return t === 'light' || t === 'dark' ? t : 'system';
+  } catch {
+    return 'system';
+  }
+}
+
+function themeToggle() {
+  const button = el('button', { class: 'btn btn-ghost btn-sm theme-toggle', attrs: { type: 'button' } });
+  const sync = () => {
+    const [, icon, label] = THEMES.find(([key]) => key === currentTheme());
+    button.textContent = icon;
+    button.setAttribute('aria-label', `${label}. Click to change.`);
+    button.title = label;
+  };
+  button.addEventListener('click', () => {
+    const next = THEMES[(THEMES.findIndex(([key]) => key === currentTheme()) + 1) % THEMES.length][0];
+    try {
+      if (next === 'system') localStorage.removeItem('theme');
+      else localStorage.setItem('theme', next);
+    } catch {
+      // storage blocked: the change lasts for this page only
+    }
+    if (next === 'system') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', next);
+    sync();
+  });
+  sync();
+  return button;
+}
+
 function renderTopbar(user, active) {
   const header = $('#topbar');
   const logout = el('button', { class: 'btn btn-ghost btn-sm', text: 'Log out', attrs: { type: 'button' } });
@@ -58,6 +99,7 @@ function renderTopbar(user, active) {
       el(
         'div',
         { class: 'account' },
+        themeToggle(),
         el('a', { class: 'who', text: `@${user.username}`, attrs: { href: '/profile.html' } }),
         logout,
       ),
