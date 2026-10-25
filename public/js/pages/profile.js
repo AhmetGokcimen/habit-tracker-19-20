@@ -63,6 +63,20 @@ function remindersCard() {
   );
 }
 
+function exportCard() {
+  return el(
+    'div',
+    { class: 'card account-details' },
+    el('p', { text: 'Download everything you created: habits, check-ins, freezes and comments. Photos are not included.' }),
+    el(
+      'div',
+      { class: 'export-links' },
+      el('a', { class: 'btn', text: 'Download JSON', attrs: { href: '/api/users/me/export?format=json', download: true } }),
+      el('a', { class: 'btn', text: 'Check-ins as CSV', attrs: { href: '/api/users/me/export?format=csv', download: true } }),
+    ),
+  );
+}
+
 function passwordField(id, name, label, autocomplete, hint) {
   const input = el('input', { class: 'input', attrs: { id, name, type: 'password', autocomplete, required: true, maxlength: name === 'current_password' ? 200 : 72 } });
   return el(
@@ -132,7 +146,7 @@ main.replaceChildren(
   el(
     'div',
     { class: 'profile-grid section' },
-    el('section', {}, el('div', { class: 'section-head' }, el('h2', { text: 'Account' })), details(user), el('div', { class: 'section-head section' }, el('h2', { text: 'Reminders' })), remindersCard()),
+    el('section', {}, el('div', { class: 'section-head' }, el('h2', { text: 'Account' })), details(user), el('div', { class: 'section-head section' }, el('h2', { text: 'Reminders' })), remindersCard(), el('div', { class: 'section-head section' }, el('h2', { text: 'Your data' })), exportCard()),
     el('section', {}, el('div', { class: 'section-head' }, el('h2', { text: 'Security' })), passwordForm()),
   ),
 );

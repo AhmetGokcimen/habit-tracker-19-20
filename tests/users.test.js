@@ -173,3 +173,52 @@ describe('Don\'t break the chain — year calendars', () => {
     assert.equal((await peek.get(`/api/habits/${h.id}/checkins/year`)).status, 403);
   });
 });
+
+describe('F10 — data export', () => {
+  test('exports only the caller\'s data, as a download, with CSV injection neutralised', async () => {
+    await createUser('exporter');
+    await createUser('stranger');
+    const me = await loginAs(app, 'exporter');
+    const stranger = await loginAs(app, 'stranger');
+    const h = (await me.post('/api/habits').send({ title: '=HYPERLINK("http://evil.test","x")', category: 'other' })).body.habit;
+    await me.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: day(0), note: '@SUM(1+1) "quoted"' });
+    const s = (await stranger.post('/api/habits').send({ title: 'Stranger secret', category: 'other' })).body.habit;
+    await stranger.post(`/api/habits/${s.id}/checkins`).send({ checkin_date: day(0), note: 'not yours' });
+
+    const json = await me.get('/api/users/me/export');
+    assert.equal(json.status, 200);
+    assert.match(json.headers['content-disposition'], /^attachment; filename="habit-tracker-exporter-\d{4}-\d{2}-\d{2}\.json"$/);
+    assert.equal(json.headers['x-content-type-options'], 'nosniff');
+    const data = JSON.parse(json.text);
+    assert.equal(data.account.username, 'exporter');
+    assert.equal(data.habits.length, 1);
+    assert.equal(data.checkins.length, 1);
+    assert.ok(!json.text.includes('Stranger secret') && !json.text.includes('not yours'));
+    assert.ok(!('password_hash' in data.account));
+
+    const csv = await me.get('/api/users/me/export?format=csv');
+    assert.match(csv.headers['content-type'], /^text\/csv/);
+    assert.ok(csv.text.includes(`"'=HYPERLINK(""http://evil.test"",""x"")"`));
+    assert.ok(csv.text.includes(`"'@SUM(1+1) ""quoted"""`));
+    assert.ok(!csv.text.includes('not yours'));
+
+    assert.equal((await me.get('/api/users/me/export?format=xml')).status, 400);
+    assert.equal((await me.get('/api/users/me/export?user_id=2')).status, 400);
+    assert.equal((await request(app).get('/api/users/me/export')).status, 401);
+  });
+
+  test('csvCell neutralises every formula trigger', () => {
+    const { csvCell } = require('../src/services/exportData');
+    for (const bad of ['=1+1', '+1', '-1', '@x', '\t=1', '\r=1']) assert.ok(csvCell(bad).startsWith(`"'`), JSON.stringify(bad));
+    assert.equal(csvCell('plain'), '"plain"');
+    assert.equal(csvCell(null), '""');
+  });
+
+  test('export is rate limited per user', async () => {
+    await createUser('hoarder');
+    const me = await loginAs(app, 'hoarder');
+    const codes = [];
+    for (let i = 0; i < 12; i++) codes.push((await me.get('/api/users/me/export')).status);
+    assert.equal(codes.filter((c) => c === 429).length >= 1, true);
+  });
+});

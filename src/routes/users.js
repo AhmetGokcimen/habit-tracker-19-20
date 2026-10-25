@@ -15,6 +15,7 @@ const schedule = require('../services/schedule');
 const { freezesByHabit } = require('../services/freezes');
 const { evaluateBadges } = require('../services/badges');
 const progress = require('../services/progress');
+const exportData = require('../services/exportData');
 const { CATEGORIES } = schemas;
 
 const router = express.Router();
@@ -104,6 +105,25 @@ router.get('/me/chain', validate({ query: schemas.chainQuery }), async (req, res
   const to = Math.min(schedule.dayNumber(`${year}-12-31`), today + 1);
   const days = to < from ? [] : progress.days(await progress.load(req.user.id, from, to), from, to);
   res.json({ year, days });
+});
+
+// Download everything you created. Attachment only, fixed content types,
+// nosniff and a sandboxing CSP so the file can never render as a page.
+router.get('/me/export', limiters.exportData, validate({ query: schemas.exportQuery }), async (req, res) => {
+  const { format } = req.valid.query;
+  const data = await exportData.collect(req.user.id);
+  // Usernames are [A-Za-z0-9_] only, so the filename needs no escaping.
+  const name = `habit-tracker-${data.account.username}-${data.exported_at.slice(0, 10)}.${format}`;
+  res.set({
+    'Content-Disposition': `attachment; filename="${name}"`,
+    'X-Content-Type-Options': 'nosniff',
+    'Content-Security-Policy': "default-src 'none'; sandbox",
+  });
+  if (format === 'csv') {
+    res.type('text/csv; charset=utf-8').send(exportData.checkinsCsv(data));
+  } else {
+    res.type('application/json; charset=utf-8').send(JSON.stringify(data, null, 2));
+  }
 });
 
 router.post(

@@ -2160,3 +2160,10 @@ textarea {
   font-family: var(--font-mono);
   font-size: 0.75rem;
 }
+
+.export-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-2);
+  margin-top: var(--s-3);
+}

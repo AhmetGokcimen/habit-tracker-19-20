@@ -201,6 +201,10 @@ const chainQuery = z.strictObject({
     .optional(),
 });
 
+const exportQuery = z.strictObject({
+  format: z.enum(['json', 'csv'], 'Format must be json or csv').default('json'),
+});
+
 const roleUpdate = z.strictObject({
   role: z.enum(['user', 'admin'], 'Role must be "user" or "admin"'),
 });
@@ -223,4 +227,5 @@ module.exports = {
   checkinProgress,
   statsQuery,
   chainQuery,
+  exportQuery,
 };

@@ -101,6 +101,8 @@ const limiters = {
   register: rateLimit({ name: 'register', windowMs: 60 * MINUTE, limit: 20, key: byIp }),
   // A stolen session must not become a way to brute-force the current password.
   passwordChange: rateLimit({ name: 'pw-change', windowMs: 15 * MINUTE, limit: 5, key: byUser, skipSuccessfulRequests: true }),
+  // Data export reads everything a user has: keep it cheap to serve.
+  exportData: rateLimit({ name: 'export', windowMs: 60 * MINUTE, limit: 10, key: byUser }),
   // Spam / abuse: all state-changing API calls per user (or per IP if anonymous).
   writes: rateLimit({ name: 'writes', windowMs: 10 * MINUTE, limit: 200, key: byUser }),
 };
