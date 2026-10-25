@@ -19,6 +19,7 @@ const zlib = require('node:zlib');
 const config = require('../src/config');
 const db = require('../src/db');
 const { hashPassword } = require('../src/services/authService');
+const schedule = require('../src/services/schedule');
 const { SEED_ACCOUNTS, SEED_HABITS, CHECKIN_NOTES, SEED_COMMENTS } = require('./seed-data');
 
 const DROP_ORDER = ['comments', 'checkins', 'habits', 'sessions', 'rate_limits', 'rate_limit_windows', 'admin_audit_log', 'users'];
@@ -125,14 +126,15 @@ async function main() {
   const habitIds = new Map();
   let checkinCount = 0;
   let photoCount = 0;
-  for (const [i, [owner, title, description, category, isPublic, checkins]] of SEED_HABITS.entries()) {
+  for (const [i, [owner, title, description, category, isPublic, checkins, plan]] of SEED_HABITS.entries()) {
     const habitId = i + 1;
     const userId = userIds.get(owner);
+    const { frequency, days_mask, weekly_target } = schedule.toColumns(plan ?? { type: 'daily' });
     habitIds.set(title, habitId);
     statements.push([
-      `INSERT INTO habits (id, user_id, title, description, category, is_public, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now', '-35 days'), datetime('now', '-35 days'))`,
-      [habitId, userId, title, description, category, isPublic ? 1 : 0],
+      `INSERT INTO habits (id, user_id, title, description, category, is_public, frequency, days_mask, weekly_target, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '-35 days'), datetime('now', '-35 days'))`,
+      [habitId, userId, title, description, category, isPublic ? 1 : 0, frequency, days_mask, weekly_target],
     ]);
     for (const [k, daysAgo] of checkinDays(checkins, rand).entries()) {
       const note = CHECKIN_NOTES[Math.floor(rand() * CHECKIN_NOTES.length)];

@@ -522,6 +522,72 @@ textarea {
   accent-color: var(--coral);
 }
 
+/* "How often?" in the habit dialog */
+.schedule-field {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+
+.schedule-field legend {
+  font-weight: 700;
+  margin-bottom: var(--s-2);
+}
+
+.day-picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s-1);
+  padding-left: 28px;
+}
+
+.day-pick {
+  position: relative;
+  cursor: pointer;
+}
+
+.day-pick input {
+  position: absolute;
+  opacity: 0;
+  inset: 0;
+  cursor: pointer;
+}
+
+.day-pick span {
+  display: inline-block;
+  min-width: 44px;
+  padding: var(--s-1) var(--s-2);
+  border: 1.5px solid var(--line);
+  border-radius: 999px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: var(--step--1);
+  background: var(--card);
+}
+
+.day-pick input:checked + span {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--card);
+}
+
+.day-pick input:focus-visible + span {
+  outline: 2px solid var(--coral);
+  outline-offset: 2px;
+}
+
+.schedule-field [hidden] {
+  display: none;
+}
+
+.schedule {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+}
+
 .file-drop {
   display: grid;
   gap: var(--s-1);
@@ -705,6 +771,12 @@ textarea {
 .chain .day.is-done {
   background: var(--coral);
   border-color: var(--coral-deep);
+}
+
+.chain .day.is-off,
+.heatmap .day.is-off {
+  opacity: 0.35;
+  border-style: dashed;
 }
 
 .chain .day.is-today {

@@ -42,7 +42,15 @@ CREATE TABLE IF NOT EXISTS habits (
   category    TEXT    NOT NULL CHECK (category IN ('health', 'fitness', 'learning', 'productivity', 'mindfulness', 'social', 'other')),
   is_public   INTEGER NOT NULL DEFAULT 0 CHECK (is_public IN (0, 1)),
   created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-  updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+  updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+  -- When the habit is due (services/schedule.js):
+  --   daily     every day
+  --   weekdays  the ISO weekdays set in days_mask (bit 0 = Monday ... bit 6 = Sunday)
+  --   weekly    weekly_target times per Monday-to-Sunday week, on any days
+  -- Columns added after the first release are also listed in db/migrations.js.
+  frequency     TEXT    NOT NULL DEFAULT 'daily' CHECK (frequency IN ('daily', 'weekdays', 'weekly')),
+  days_mask     INTEGER NOT NULL DEFAULT 127 CHECK (days_mask BETWEEN 1 AND 127),
+  weekly_target INTEGER NOT NULL DEFAULT 7 CHECK (weekly_target BETWEEN 1 AND 7)
 );
 CREATE INDEX IF NOT EXISTS idx_habits_user ON habits(user_id);
 CREATE INDEX IF NOT EXISTS idx_habits_public_category ON habits(is_public, category);

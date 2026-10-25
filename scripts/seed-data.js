@@ -14,24 +14,25 @@ const SEED_ACCOUNTS = [
   { username: 'moderator', email: 'moderator@example.com', role: 'admin' },
 ];
 
-// [owner, title, description, category, isPublic, check-ins in the last 30 days]
+// [owner, title, description, category, isPublic, check-ins in the last 30 days, schedule?]
+// schedule defaults to { type: 'daily' }; see src/services/schedule.js.
 const SEED_HABITS = [
   ['alice', 'Morning run', '5 km before breakfast. Rain or shine.', 'fitness', true, 14],
   ['alice', 'Read 20 pages', 'Currently reading a history of maps.', 'learning', true, 18],
   ['alice', 'No phone after 10pm', 'Charge it in the kitchen.', 'mindfulness', true, 9],
   ['alice', 'Therapy homework', 'Private notes for my sessions.', 'health', false, 6],
-  ['alice', 'Call grandma', 'Every Sunday at least.', 'social', false, 4],
+  ['alice', 'Call grandma', 'Every Sunday at least.', 'social', false, 4, { type: 'weekdays', days: [7] }],
   ['bob', 'Drink 2 litres of water', 'Two bottles at the desk.', 'health', true, 20],
   ['bob', 'Practice guitar', '15 minutes of scales, then a song.', 'learning', true, 11],
   ['bob', 'Inbox zero by 6pm', '', 'productivity', true, 8],
-  ['bob', 'Push-ups', '3 sets, add one rep a week.', 'fitness', true, 16],
-  ['bob', 'Budget review', 'Check spending against the plan.', 'productivity', false, 5],
+  ['bob', 'Push-ups', '3 sets, add one rep a week.', 'fitness', true, 16, { type: 'weekly', times: 4 }],
+  ['bob', 'Budget review', 'Check spending against the plan.', 'productivity', false, 5, { type: 'weekly', times: 1 }],
   ['carol', 'Meditate 10 minutes', 'Guided session after lunch.', 'mindfulness', true, 19],
   ['carol', 'Learn Turkish vocabulary', '10 new words a day.', 'learning', true, 22],
-  ['carol', 'Cook dinner at home', 'No takeaway on weekdays.', 'health', true, 12],
+  ['carol', 'Cook dinner at home', 'No takeaway on weekdays.', 'health', true, 12, { type: 'weekdays', days: [1, 2, 3, 4, 5] }],
   ['carol', 'Write in a journal', 'Three lines minimum.', 'mindfulness', false, 15],
   ['carol', 'Stretch before bed', '', 'fitness', true, 10],
-  ['carol', 'Message an old friend', 'One person a week.', 'social', true, 4],
+  ['carol', 'Message an old friend', 'One person a week.', 'social', true, 4, { type: 'weekly', times: 1 }],
   ['admin', 'Review moderation queue', 'Daily check of reported content.', 'productivity', false, 7],
   ['admin', 'Walk 8,000 steps', '', 'fitness', true, 13],
   ['admin', 'Water the plants', 'Monstera needs it every 3 days.', 'other', true, 9],

@@ -7,7 +7,7 @@ import { api, ApiError } from '../api.js';
 import { el, $, idFromQuery, localISODate, addDays, formatDate, formatTimestamp } from '../dom.js';
 import { initPage, toast, errorMessage, confirmDialog, showFormErrors, clearFormErrors, withBusy } from '../shell.js';
 import { reveal } from '../motion.js';
-import { categoryChip, visibilityLabel, currentStreak, streakBadge, habitDialog } from '../components.js';
+import { categoryChip, visibilityLabel, streakBadge, habitDialog, isDue, scheduleLabel } from '../components.js';
 
 const MAX_PHOTO_BYTES = 1024 * 1024;
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -17,6 +17,7 @@ const habitId = idFromQuery();
 let user;
 let habit;
 let checkins = [];
+let streak = null;
 let comments = [];
 
 const isOwner = () => habit.owner.id === user.id;
@@ -87,7 +88,7 @@ function header() {
       {},
       el('p', { class: 'eyebrow' }, categoryChip(habit.category), ' ', visibilityLabel(habit.is_public)),
       el('h1', { class: 'detail-title section', text: habit.title }),
-      el('p', { class: 'byline', text: `by @${habit.owner.username} · since ${formatDate(habit.created_at)}` }),
+      el('p', { class: 'byline', text: `by @${habit.owner.username} · ${scheduleLabel(habit.schedule)} · since ${formatDate(habit.created_at)}` }),
       habit.description ? el('p', { class: 'description', text: habit.description }) : null,
     ),
     ownerTools(),
@@ -105,7 +106,8 @@ function heatmap() {
   for (let i = 0; i < lead; i++) cells.push(el('span', { class: 'day is-future' }));
   for (let i = 0; i < 84; i++) {
     const date = addDays(start, i);
-    cells.push(el('span', { class: `day${done.has(date) ? ' is-done' : ''}`, attrs: { title: date } }));
+    const off = !done.has(date) && !isDue(habit, date);
+    cells.push(el('span', { class: `day${done.has(date) ? ' is-done' : ''}${off ? ' is-off' : ''}`, attrs: { title: date } }));
   }
   return el('div', { class: 'heatmap', attrs: { role: 'img', 'aria-label': `${checkins.length} check-ins recorded` } }, cells);
 }
@@ -212,7 +214,7 @@ function checkinSection() {
       'div',
       { class: 'section-head' },
       el('h2', { text: 'Check-ins', attrs: { id: 'checkins-heading' } }),
-      streakBadge(currentStreak(checkins.map((c) => c.checkin_date))),
+      streakBadge(streak),
     ),
     el('p', { class: 'mono muted', text: 'Last 12 weeks · private to you and admins' }),
     el('div', { class: 'section' }, heatmap()),
@@ -344,7 +346,7 @@ async function loadComments() {
 
 async function refresh() {
   ({ habit } = await api.get(`/api/habits/${habitId}`));
-  if (isOwner() || isAdmin()) ({ checkins } = await api.get(`/api/habits/${habit.id}/checkins`));
+  if (isOwner() || isAdmin()) ({ checkins, streak } = await api.get(`/api/habits/${habit.id}/checkins`));
   await loadComments();
 }
 

@@ -43,17 +43,40 @@ const safeText = (max, label) =>
     .max(max, `${label} must be at most ${max} characters`)
     .refine((s) => !UNSAFE_CHARS.test(s), `${label} contains invalid characters`);
 
+// ISO weekdays 1 (Monday) ... 7 (Sunday); see services/schedule.js.
+const schedule = z.discriminatedUnion(
+  'type',
+  [
+    z.strictObject({ type: z.literal('daily') }),
+    z.strictObject({
+      type: z.literal('weekdays'),
+      days: z
+        .array(z.number().int().min(1).max(7), 'Pick the days of the week')
+        .min(1, 'Pick at least one day')
+        .max(7)
+        .refine((days) => new Set(days).size === days.length, 'Each day may appear only once'),
+    }),
+    z.strictObject({
+      type: z.literal('weekly'),
+      times: z.number().int().min(1, 'At least once a week').max(6, 'Use "daily" for every day'),
+    }),
+  ],
+  'Unknown schedule type',
+);
+
 const habitFields = {
   title: safeText(100, 'Title').pipe(z.string().min(1, 'Title is required')),
   description: safeText(1000, 'Description'),
   category: z.enum(CATEGORIES, 'Unknown category'),
   is_public: z.boolean(),
+  schedule,
 };
 
 const habitCreate = z.strictObject({
   ...habitFields,
   description: habitFields.description.default(''),
   is_public: habitFields.is_public.default(false),
+  schedule: schedule.default({ type: 'daily' }),
 });
 
 const habitUpdate = z

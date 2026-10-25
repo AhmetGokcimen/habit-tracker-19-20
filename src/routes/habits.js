@@ -11,6 +11,7 @@ const { validate } = require('../middleware/validate');
 const { requireAuth } = require('../middleware/authenticate');
 const { authorize } = require('../middleware/authorize');
 const { moderationAudit } = require('../services/auditLog');
+const schedule = require('../services/schedule');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -25,6 +26,7 @@ function serializeHabit(row) {
     description: row.description,
     category: row.category,
     is_public: row.is_public === 1,
+    schedule: schedule.fromRow(row),
     owner: { id: row.user_id, username: row.owner_username },
     created_at: row.created_at,
     updated_at: row.updated_at,
@@ -62,28 +64,55 @@ router.get('/', validate({ query: schemas.habitSearch }), async (req, res) => {
   });
 });
 
-// The caller's own habits (public and private), with private check-in stats.
+// The caller's own habits (public and private), with private check-in stats
+// and streaks computed from the full history.
 router.get('/mine', async (req, res) => {
-  const rows = await db.all(
-    `SELECT h.*, u.username AS owner_username,
-            (SELECT COUNT(*) FROM checkins c WHERE c.habit_id = h.id) AS checkin_count,
-            (SELECT MAX(checkin_date) FROM checkins c WHERE c.habit_id = h.id) AS last_checkin,
-            (SELECT group_concat(checkin_date) FROM checkins c
-              WHERE c.habit_id = h.id AND c.checkin_date >= date('now', '-40 days')) AS recent_dates
-       FROM habits h JOIN users u ON u.id = h.user_id
-      WHERE h.user_id = ?
-      ORDER BY h.created_at DESC, h.id DESC`,
-    [req.user.id],
-  );
-  res.json({ habits: rows.map(serializeHabit) });
+  const [rows, dates] = await Promise.all([
+    db.all(
+      `SELECT h.*, u.username AS owner_username,
+              (SELECT COUNT(*) FROM checkins c WHERE c.habit_id = h.id) AS checkin_count,
+              (SELECT MAX(checkin_date) FROM checkins c WHERE c.habit_id = h.id) AS last_checkin,
+              (SELECT group_concat(checkin_date) FROM checkins c
+                WHERE c.habit_id = h.id AND c.checkin_date >= date('now', '-40 days')) AS recent_dates
+         FROM habits h JOIN users u ON u.id = h.user_id
+        WHERE h.user_id = ?
+        ORDER BY h.created_at DESC, h.id DESC`,
+      [req.user.id],
+    ),
+    db.all('SELECT habit_id, checkin_date FROM checkins WHERE user_id = ?', [req.user.id]),
+  ]);
+
+  const byHabit = groupDates(dates);
+  const thisWeek = schedule.weekIndex(schedule.todayNumber());
+  res.json({
+    habits: rows.map((row) => {
+      const done = byHabit.get(row.id) ?? [];
+      return {
+        ...serializeHabit(row),
+        streak: schedule.streaks(row, done),
+        week_count: done.filter((d) => schedule.weekIndex(schedule.dayNumber(d)) === thisWeek).length,
+      };
+    }),
+  });
 });
+
+function groupDates(rows) {
+  const map = new Map();
+  for (const { habit_id, checkin_date } of rows) {
+    if (!map.has(habit_id)) map.set(habit_id, []);
+    map.get(habit_id).push(checkin_date);
+  }
+  return map;
+}
 
 router.post('/', validate({ body: schemas.habitCreate }), async (req, res) => {
   const { title, description, category, is_public } = req.valid.body;
+  const { frequency, days_mask, weekly_target } = schedule.toColumns(req.valid.body.schedule);
   // Owner is always the authenticated user, never a value from the request.
   const { lastInsertRowid } = await db.run(
-    'INSERT INTO habits (user_id, title, description, category, is_public) VALUES (?, ?, ?, ?, ?)',
-    [req.user.id, title, description, category, is_public ? 1 : 0],
+    `INSERT INTO habits (user_id, title, description, category, is_public, frequency, days_mask, weekly_target)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [req.user.id, title, description, category, is_public ? 1 : 0, frequency, days_mask, weekly_target],
   );
   const row = await db.get(
     'SELECT h.*, u.username AS owner_username FROM habits h JOIN users u ON u.id = h.user_id WHERE h.id = ?',
@@ -98,10 +127,12 @@ router.get('/:id', authorize('habit', 'read'), async (req, res) => {
 });
 
 router.patch('/:id', authorize('habit', 'update'), validate({ body: schemas.habitUpdate }), async (req, res) => {
-  const updates = { ...req.valid.body };
+  const { schedule: newSchedule, ...updates } = req.valid.body;
   if ('is_public' in updates) updates.is_public = updates.is_public ? 1 : 0;
+  if (newSchedule) Object.assign(updates, schedule.toColumns(newSchedule));
 
-  // Column names come from the strict schema's fixed key set, never from raw input.
+  // Column names come from the strict schema's fixed key set (and toColumns),
+  // never from raw input.
   const columns = Object.keys(updates);
   await db.run(
     `UPDATE habits SET ${columns.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`,

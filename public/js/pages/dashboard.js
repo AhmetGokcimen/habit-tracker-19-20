@@ -4,7 +4,7 @@ import { api, ApiError } from '../api.js';
 import { el, $, localISODate, formatShortDate, formatDate } from '../dom.js';
 import { initPage, toast, errorMessage } from '../shell.js';
 import { reveal } from '../motion.js';
-import { categoryChip, visibilityLabel, chain, currentStreak, streakBadge, habitDialog } from '../components.js';
+import { categoryChip, visibilityLabel, chain, streakBadge, habitDialog, isDue, scheduleLabel } from '../components.js';
 
 const main = $('#main');
 const today = localISODate();
@@ -16,19 +16,30 @@ function greeting(name) {
   return `${part}, ${name}.`;
 }
 
+const doneToday = (h) => h.recent_checkins.includes(today);
+
+// A weekly habit is "due" today until this week's target is reached.
+function dueToday(h) {
+  if (h.schedule.type === 'weekly') return doneToday(h) || h.week_count < h.schedule.times;
+  return isDue(h, today);
+}
+
 function todayTally() {
-  const done = habits.filter((h) => h.recent_checkins.includes(today)).length;
-  const strokes = habits.map((h, i) =>
+  const due = habits.filter(dueToday);
+  const done = due.filter(doneToday).length;
+  const strokes = due.map((h, i) =>
     el('span', {
-      class: `stroke${h.recent_checkins.includes(today) ? ' is-done' : ''}`,
+      class: `stroke${doneToday(h) ? ' is-done' : ''}`,
       vars: { '--r': (i + 1) % 5 === 0 ? '-62deg' : '0deg' },
     }),
   );
   const label = habits.length === 0
     ? 'Nothing to check in yet.'
-    : done === habits.length
-      ? 'Everything is checked in for today.'
-      : null;
+    : due.length === 0
+      ? 'A rest day — nothing is due today.'
+      : done === due.length
+        ? 'Everything is checked in for today.'
+        : null;
   return el(
     'div',
     { class: 'today-tally' },
@@ -36,7 +47,7 @@ function todayTally() {
     el(
       'p',
       { class: 'tally-label' },
-      label ?? [el('strong', { text: String(done) }), ` of ${habits.length} checked in today`],
+      label ?? [el('strong', { text: String(done) }), ` of ${due.length} checked in today`],
     ),
   );
 }
@@ -53,36 +64,43 @@ async function checkIn(habit, button) {
       return;
     }
   }
-  habit.recent_checkins = [...new Set([...habit.recent_checkins, today])].sort();
-  habit.checkin_count += 1;
-  render();
+  await load();
 }
 
 function habitCard(habit) {
-  const doneToday = habit.recent_checkins.includes(today);
-  const action = doneToday
+  const isDone = doneToday(habit);
+  const resting = !isDone && !dueToday(habit);
+  const action = isDone
     ? el('span', { class: 'checked-stamp', text: '✓ done today' })
-    : el('button', { class: 'btn btn-accent btn-sm', text: 'Check in', attrs: { type: 'button', 'aria-label': `Check in: ${habit.title}` } });
-  if (!doneToday) action.addEventListener('click', () => checkIn(habit, action));
+    : el('button', {
+        class: `btn btn-sm ${resting ? 'btn-ghost' : 'btn-accent'}`,
+        text: resting ? 'Do it anyway' : 'Check in',
+        attrs: { type: 'button', 'aria-label': `Check in: ${habit.title}` },
+      });
+  if (!isDone) action.addEventListener('click', () => checkIn(habit, action));
+  const weekly = habit.schedule.type === 'weekly'
+    ? el('p', { class: 'mono muted', text: `${habit.week_count} of ${habit.schedule.times} this week` })
+    : null;
 
   return el(
     'article',
     { class: 'card tilt habit-card' },
-    el('div', { class: 'meta' }, categoryChip(habit.category), visibilityLabel(habit.is_public)),
+    el('div', { class: 'meta' }, categoryChip(habit.category), el('span', { class: 'schedule', text: scheduleLabel(habit.schedule) }), visibilityLabel(habit.is_public)),
     el(
       'div',
       {},
       el('h3', {}, el('a', { text: habit.title, attrs: { href: `/habit.html?id=${habit.id}` } })),
       habit.description ? el('p', { class: 'desc', text: habit.description }) : null,
     ),
-    chain(habit.recent_checkins),
+    chain(habit.recent_checkins, 21, habit),
     el(
       'div',
       { class: 'actions' },
       el(
         'div',
         {},
-        streakBadge(currentStreak(habit.recent_checkins)),
+        streakBadge(habit.streak),
+        weekly,
         el('p', { class: 'mono muted', text: habit.last_checkin ? `last: ${formatDate(habit.last_checkin)}` : 'no check-ins yet' }),
       ),
       action,

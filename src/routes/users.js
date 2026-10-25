@@ -11,33 +11,14 @@ const { requireAuth } = require('../middleware/authenticate');
 const { limiters } = require('../middleware/rateLimit');
 const { hashPassword, verifyPassword } = require('../services/authService');
 const { badRequest } = require('../utils/httpError');
+const schedule = require('../services/schedule');
 
 const router = express.Router();
 router.use(requireAuth);
 
-const DAY_MS = 24 * 60 * 60 * 1000;
-const dayNumber = (isoDate) => Date.parse(`${isoDate}T00:00:00Z`) / DAY_MS;
-
-// Longest run of consecutive days, and the run that is still alive
-// (its last day is today or yesterday, UTC).
-function streaks(sortedDates) {
-  let longest = 0;
-  let run = 0;
-  let prev = null;
-  for (const date of sortedDates) {
-    const n = dayNumber(date);
-    run = prev !== null && n - prev === 1 ? run + 1 : 1;
-    longest = Math.max(longest, run);
-    prev = n;
-  }
-  const today = Math.floor(Date.now() / DAY_MS);
-  const current = prev !== null && today - prev <= 1 ? run : 0;
-  return { longest, current };
-}
-
 router.get('/me', async (req, res) => {
   const id = req.user.id;
-  const [account, counts, dates] = await Promise.all([
+  const [account, counts, dates, habits] = await Promise.all([
     db.get('SELECT id, username, email, role, created_at FROM users WHERE id = ?', [id]),
     db.get(
       `SELECT (SELECT COUNT(*) FROM habits WHERE user_id = ?1) AS habits,
@@ -48,6 +29,7 @@ router.get('/me', async (req, res) => {
       [id],
     ),
     db.all('SELECT habit_id, checkin_date FROM checkins WHERE user_id = ? ORDER BY habit_id, checkin_date', [id]),
+    db.all('SELECT id, frequency, days_mask, weekly_target FROM habits WHERE user_id = ?', [id]),
   ]);
 
   const byHabit = new Map();
@@ -55,10 +37,12 @@ router.get('/me', async (req, res) => {
     if (!byHabit.has(habit_id)) byHabit.set(habit_id, []);
     byHabit.get(habit_id).push(checkin_date);
   }
+  // Day streaks only: a weekly habit's streak is counted in weeks.
   let longestStreak = 0;
   let bestCurrentStreak = 0;
-  for (const list of byHabit.values()) {
-    const s = streaks(list);
+  for (const habit of habits) {
+    const s = schedule.streaks(habit, byHabit.get(habit.id) ?? []);
+    if (s.unit !== 'days') continue;
     longestStreak = Math.max(longestStreak, s.longest);
     bestCurrentStreak = Math.max(bestCurrentStreak, s.current);
   }
