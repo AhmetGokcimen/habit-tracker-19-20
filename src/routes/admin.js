@@ -82,6 +82,7 @@ router.delete('/users/:id', authorize('user', 'read'), async (req, res) => {
       ['DELETE FROM streak_freezes WHERE user_id = ?', [id]],
       ['DELETE FROM checkins WHERE user_id = ?', [id]],
       ['DELETE FROM habits WHERE user_id = ?', [id]],
+      ['DELETE FROM follows WHERE follower_id = ? OR followee_id = ?', [id, id]],
       // Removing the session rows invalidates the user's tokens immediately.
       ['DELETE FROM sessions WHERE user_id = ?', [id]],
       ['DELETE FROM users WHERE id = ?', [id]],

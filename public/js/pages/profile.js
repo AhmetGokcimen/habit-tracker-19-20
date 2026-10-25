@@ -63,6 +63,18 @@ function remindersCard() {
   );
 }
 
+async function followingCard() {
+  const { following } = await api.get('/api/users/me/following');
+  return el(
+    'div',
+    { class: 'card account-details' },
+    following.length
+      ? el('ul', { class: 'following-list' }, following.map((u) => el('li', {}, el('a', { text: `@${u.username}`, attrs: { href: `/user.html?id=${u.id}` } }))))
+      : el('p', { class: 'muted', text: 'You don’t follow anyone yet. Tap an @name on Explore to see their profile.' }),
+    el('p', { class: 'hint', text: 'Only you can see this list. Others only see how many followers they have.' }),
+  );
+}
+
 function exportCard() {
   return el(
     'div',
@@ -146,7 +158,7 @@ main.replaceChildren(
   el(
     'div',
     { class: 'profile-grid section' },
-    el('section', {}, el('div', { class: 'section-head' }, el('h2', { text: 'Account' })), details(user), el('div', { class: 'section-head section' }, el('h2', { text: 'Reminders' })), remindersCard(), el('div', { class: 'section-head section' }, el('h2', { text: 'Your data' })), exportCard()),
+    el('section', {}, el('div', { class: 'section-head' }, el('h2', { text: 'Account' })), details(user), el('div', { class: 'section-head section' }, el('h2', { text: 'Reminders' })), remindersCard(), el('div', { class: 'section-head section' }, el('h2', { text: 'Following' })), await followingCard(), el('div', { class: 'section-head section' }, el('h2', { text: 'Your data' })), exportCard()),
     el('section', {}, el('div', { class: 'section-head' }, el('h2', { text: 'Security' })), passwordForm()),
   ),
 );

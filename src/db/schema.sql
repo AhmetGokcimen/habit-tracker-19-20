@@ -130,6 +130,16 @@ CREATE TABLE IF NOT EXISTS comments (
 );
 CREATE INDEX IF NOT EXISTS idx_comments_habit ON comments(habit_id);
 
+-- Following (F11). Grants no access: the feed only shows public habits.
+CREATE TABLE IF NOT EXISTS follows (
+  follower_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  followee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (follower_id, followee_id),
+  CHECK (follower_id <> followee_id)
+);
+CREATE INDEX IF NOT EXISTS idx_follows_followee ON follows(followee_id);
+
 -- The system can never be left without an administrator. Writes are
 -- serialized by SQLite, so this also holds when two admins act concurrently.
 CREATE TRIGGER IF NOT EXISTS users_keep_last_admin_on_update
