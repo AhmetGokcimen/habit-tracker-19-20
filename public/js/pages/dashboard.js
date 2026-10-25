@@ -4,12 +4,14 @@ import { api, ApiError } from '../api.js';
 import { el, $, localISODate, addDays, formatShortDate, formatDate } from '../dom.js';
 import { initPage, toast, errorMessage } from '../shell.js';
 import { reveal } from '../motion.js';
+import { createMascot } from '../mascot.js';
 import { categoryChip, visibilityLabel, chain, streakBadge, habitDialog, isDue, scheduleLabel, announceNewBadges } from '../components.js';
 
 const main = $('#main');
 const today = localISODate();
 let habits = [];
 let freezesLeft = 0;
+let buddy = null; // { node, mascot, bubble }
 
 function greeting(name) {
   const h = new Date().getHours();
@@ -66,6 +68,7 @@ async function checkIn(habit, button) {
     }
   }
   await load();
+  buddy?.mascot.react('happy');
 }
 
 // Offer a freeze when yesterday was a missed due day right after a done
@@ -145,6 +148,39 @@ async function addHabit() {
   }
 }
 
+// Sprout reacts to today's progress and grows with the best current streak.
+function buddyMood() {
+  const due = habits.filter(dueToday);
+  const done = due.filter(doneToday).length;
+  const best = Math.max(0, ...habits.map((h) => (h.streak.unit === 'days' ? h.streak.current : h.streak.current * 7)));
+  let mood = 'neutral';
+  let line;
+  if (habits.length === 0) line = 'Hi! Add a habit and I’ll keep you company.';
+  else if (due.length === 0) line = 'Rest day. I’m just here to grow.';
+  else if (done === 0) {
+    mood = 'sleepy';
+    line = 'Wake me up with your first check-in…';
+  } else if (done < due.length) line = `${due.length - done} to go. You’ve got this!`;
+  else {
+    mood = 'proud';
+    line = 'All done today. Look at me grow!';
+  }
+  return { mood, line, growth: Math.min(best, 30) / 30 };
+}
+
+function renderBuddy() {
+  if (!buddy) {
+    const node = el('div', { class: 'buddy-figure', attrs: { role: 'img', 'aria-label': 'Sprout, your habit buddy' } });
+    const bubble = el('p', { class: 'buddy-bubble', attrs: { 'aria-live': 'polite' } });
+    buddy = { node: el('div', { class: 'buddy' }, bubble, node), mascot: createMascot(node, { covering: false }), bubble };
+    addEventListener('pointermove', (e) => buddy.mascot.lookAt(e.clientX, e.clientY));
+  }
+  const { mood, line, growth } = buddyMood();
+  buddy.mascot.setMood(mood, growth);
+  buddy.bubble.textContent = line;
+  return buddy.node;
+}
+
 function render() {
   const user = main.dataset.username;
   const newButton = el('button', { class: 'btn btn-primary', text: '+ New habit', attrs: { type: 'button' } });
@@ -160,7 +196,7 @@ function render() {
       el('h1', { text: greeting(user) }),
       todayTally(),
     ),
-    newButton,
+    el('div', { class: 'head-side' }, renderBuddy(), newButton),
   );
 
   let body;

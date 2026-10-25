@@ -311,6 +311,48 @@ textarea {
   margin-bottom: var(--s-6);
 }
 
+/* Dashboard buddy (Sprout) next to the "New habit" button */
+.head-side {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-4);
+}
+
+.buddy {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--s-2);
+}
+
+.buddy-figure.mascot {
+  width: 112px;
+  flex: none;
+}
+
+.buddy-bubble {
+  position: relative;
+  max-width: 17ch;
+  margin: 0 0 var(--s-6);
+  padding: var(--s-2) var(--s-3);
+  border: 1.5px solid var(--ink);
+  border-radius: 14px 14px 4px 14px;
+  background: var(--card);
+  font-size: var(--step--1);
+  font-weight: 700;
+  box-shadow: var(--shadow-1);
+}
+
+@media (max-width: 640px) {
+  .head-side {
+    width: 100%;
+    justify-content: space-between;
+  }
+
+  .buddy-figure.mascot {
+    width: 84px;
+  }
+}
+
 .page-head .lede {
   margin-top: var(--s-3);
   max-width: 52ch;
