@@ -114,3 +114,29 @@ describe('F3 — badges', () => {
     assert.equal((await agent.patch('/api/users/me').send({ badges: ['streak-100'] })).status, 404);
   });
 });
+
+describe('F6 — personal statistics', () => {
+  test('stats cover only the caller\'s own habits and validate the range', async () => {
+    await createUser('statsy');
+    await createUser('other');
+    const me = await loginAs(app, 'statsy');
+    const other = await loginAs(app, 'other');
+    const h = (await me.post('/api/habits').send({ title: 'Walk', category: 'fitness' })).body.habit;
+    const o = (await other.post('/api/habits').send({ title: 'Secret', category: 'health', is_public: true })).body.habit;
+    await me.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: day(0) });
+    await other.post(`/api/habits/${o.id}/checkins`).send({ checkin_date: day(0) });
+
+    const res = await me.get('/api/users/me/stats?range=30');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.daily.length, 30);
+    assert.deepEqual(res.body.habits.map((x) => x.title), ['Walk']);
+    assert.equal(res.body.habits[0].done, 1);
+    assert.deepEqual(res.body.by_category, [{ category: 'fitness', done: 1 }]);
+    assert.equal(res.body.by_weekday.length, 7);
+
+    for (const q of ['?range=7', '?range=30&range=90', '?range=1e9', '?user_id=2', '?range=30&x=1']) {
+      assert.equal((await me.get(`/api/users/me/stats${q}`)).status, 400, q);
+    }
+    assert.equal((await request(app).get('/api/users/me/stats')).status, 401);
+  });
+});

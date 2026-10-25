@@ -149,6 +149,11 @@ const passwordChange = z
     path: ['new_password'],
   });
 
+// Statistics window in days.
+const statsQuery = z.strictObject({
+  range: z.enum(['30', '90', '365'], 'Range must be 30, 90 or 365').default('30'),
+});
+
 const roleUpdate = z.strictObject({
   role: z.enum(['user', 'admin'], 'Role must be "user" or "admin"'),
 });
@@ -166,4 +171,5 @@ module.exports = {
   checkinCreate,
   checkinUpdate,
   freezeCreate,
+  statsQuery,
 };

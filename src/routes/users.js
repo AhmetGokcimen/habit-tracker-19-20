@@ -14,6 +14,8 @@ const { badRequest } = require('../utils/httpError');
 const schedule = require('../services/schedule');
 const { freezesByHabit } = require('../services/freezes');
 const { evaluateBadges } = require('../services/badges');
+const progress = require('../services/progress');
+const { CATEGORIES } = schemas;
 
 const router = express.Router();
 router.use(requireAuth);
@@ -53,6 +55,40 @@ router.get('/me', async (req, res) => {
 
   const stats = { ...counts, longest_streak: longestStreak, best_current_streak: bestCurrentStreak };
   res.json({ user: account, stats, badges: evaluateBadges(stats) });
+});
+
+// Personal statistics over the last 30 / 90 / 365 days (own data only).
+router.get('/me/stats', validate({ query: schemas.statsQuery }), async (req, res) => {
+  const range = Number(req.valid.query.range);
+  const to = schedule.todayNumber();
+  const from = to - range + 1;
+  const data = await progress.load(req.user.id, from, to);
+  const daily = progress.days(data, from, to);
+  const habits = progress.perHabit(data, from, to);
+
+  const byWeekday = Array.from({ length: 7 }, (_, i) => ({ weekday: i + 1, due: 0, done: 0 }));
+  for (const d of daily) {
+    const w = byWeekday[schedule.isoWeekday(schedule.dayNumber(d.date)) - 1];
+    w.due += d.due;
+    w.done += d.done;
+  }
+  const byCategory = CATEGORIES.map((category) => ({
+    category,
+    done: habits.filter((h) => h.category === category).reduce((sum, h) => sum + h.done, 0),
+  })).filter((c) => c.done > 0);
+
+  const due = daily.reduce((s, d) => s + d.due, 0);
+  const done = daily.reduce((s, d) => s + d.done, 0);
+  res.json({
+    range,
+    from: schedule.isoDate(from),
+    to: schedule.isoDate(to),
+    totals: { due, done, rate: due === 0 ? null : Math.round((done / due) * 100) },
+    daily,
+    by_weekday: byWeekday.map((w) => ({ ...w, rate: w.due === 0 ? null : Math.round((w.done / w.due) * 100) })),
+    by_category: byCategory,
+    habits,
+  });
 });
 
 router.post(
