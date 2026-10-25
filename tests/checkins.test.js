@@ -194,3 +194,26 @@ describe('F8 — photo upload', () => {
     assert.ok(Buffer.compare(res.body, JPEG) === 0);
   });
 });
+
+describe('F7 — back-filling and undo', () => {
+  test('/mine exposes today\'s check-in id only to the owner, and undo deletes it', async () => {
+    await createUser('undoer');
+    await createUser('peeker');
+    const me = await loginAs(app, 'undoer');
+    const peeker = await loginAs(app, 'peeker');
+    const h = (await me.post('/api/habits').send({ title: 'Plank', category: 'fitness', is_public: true })).body.habit;
+    const today = new Date().toISOString().slice(0, 10);
+    const created = (await me.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: today })).body.checkin;
+
+    const mine = (await me.get('/api/habits/mine')).body.habits.find((x) => x.id === h.id);
+    assert.deepEqual(mine.latest_checkins, [{ id: created.id, checkin_date: today }]);
+
+    // Another user can neither see nor delete it.
+    assert.equal('latest_checkins' in (await peeker.get(`/api/habits/${h.id}`)).body.habit, false);
+    assert.equal((await peeker.delete(`/api/checkins/${created.id}`)).status, 403);
+
+    assert.equal((await me.delete(`/api/checkins/${created.id}`)).status, 204);
+    const after = (await me.get('/api/habits/mine')).body.habits.find((x) => x.id === h.id);
+    assert.deepEqual(after.latest_checkins, []);
+  });
+});

@@ -112,9 +112,42 @@ function heatmap() {
     const off = !done.has(date) && !isDue(habit, date);
     const ice = !done.has(date) && frozen.has(date);
     const state = done.has(date) ? ' is-done' : ice ? ' is-frozen' : off ? ' is-off' : '';
-    cells.push(el('span', { class: `day${state}`, attrs: { title: ice ? `${date} — frozen` : date } }));
+    const title = `${formatDate(date)}${done.has(date) ? ' — checked in' : ice ? ' — frozen' : ''}`;
+    if (isOwner() && date <= today) {
+      // The owner can fill in or clear any past day straight from the calendar.
+      const cell = el('button', {
+        class: `day day-btn${state}`,
+        attrs: { type: 'button', title, 'aria-label': `${title}. ${done.has(date) ? 'Remove check-in' : 'Check in for this day'}` },
+      });
+      cell.addEventListener('click', () => toggleDay(date));
+      cells.push(cell);
+    } else {
+      cells.push(el('span', { class: `day${state}`, attrs: { title } }));
+    }
   }
-  return el('div', { class: 'heatmap', attrs: { role: 'img', 'aria-label': `${checkins.length} check-ins recorded` } }, cells);
+  return el('div', { class: 'heatmap', attrs: { role: isOwner() ? 'group' : 'img', 'aria-label': `${checkins.length} check-ins recorded` } }, cells);
+}
+
+async function toggleDay(date) {
+  const existing = checkins.find((c) => c.checkin_date === date);
+  try {
+    if (existing) {
+      const ok = await confirmDialog({
+        title: 'Remove this check-in?',
+        message: `The check-in for ${formatDate(date)}${existing.note || existing.has_photo ? ', with its note and photo,' : ''} will be removed.`,
+        confirmLabel: 'Remove check-in',
+      });
+      if (!ok) return;
+      await api.del(`/api/checkins/${existing.id}`);
+      toast(`Removed ${formatDate(date)}`);
+    } else {
+      await api.post(`/api/habits/${habit.id}/checkins`, { checkin_date: date });
+      toast(`Checked in for ${formatDate(date)}`);
+    }
+    await refresh();
+  } catch (err) {
+    toast(errorMessage(err), { error: true });
+  }
 }
 
 // Missed due days in the last 7 days that a freeze could cover.
@@ -282,7 +315,7 @@ function checkinSection() {
       el('h2', { text: 'Check-ins', attrs: { id: 'checkins-heading' } }),
       streakBadge(streak),
     ),
-    el('p', { class: 'mono muted', text: 'Last 12 weeks · private to you and admins' }),
+    el('p', { class: 'mono muted', text: isOwner() ? 'Last 12 weeks · tap a day to fill it in or clear it · private to you and admins' : 'Last 12 weeks · private to you and admins' }),
     el('div', { class: 'section' }, heatmap()),
     isOwner() ? freezePanel() : null,
     isOwner() ? el('div', { class: 'section' }, checkinForm()) : null,

@@ -96,14 +96,25 @@ function ensureToastRegion() {
   return region;
 }
 
-export function toast(message, { error = false } = {}) {
-  const item = el('div', { class: `toast${error ? ' is-error' : ''}`, text: message });
-  ensureToastRegion().append(item);
-  setTimeout(() => {
+/** action: optional { label, onClick } shown as a button (e.g. "Undo"). */
+export function toast(message, { error = false, action = null } = {}) {
+  const item = el('div', { class: `toast${error ? ' is-error' : ''}` }, el('span', { text: message }));
+  const leave = () => {
     item.classList.add('is-leaving');
     item.addEventListener('animationend', () => item.remove(), { once: true });
     setTimeout(() => item.remove(), 400);
-  }, 3200);
+  };
+  if (action) {
+    const button = el('button', { class: 'toast-action', text: action.label, attrs: { type: 'button' } });
+    button.addEventListener('click', () => {
+      button.disabled = true;
+      leave();
+      action.onClick();
+    });
+    item.append(button);
+  }
+  ensureToastRegion().append(item);
+  setTimeout(leave, action ? 6000 : 3200);
 }
 
 export function errorMessage(err) {

@@ -55,11 +55,21 @@ function todayTally() {
   );
 }
 
+async function undo(checkinId, title) {
+  try {
+    await api.del(`/api/checkins/${checkinId}`);
+    toast(`Undone: ${title}`);
+    await load();
+  } catch (err) {
+    toast(errorMessage(err), { error: true });
+  }
+}
+
 async function checkIn(habit, button) {
   button.disabled = true;
   try {
-    await api.post(`/api/habits/${habit.id}/checkins`, { checkin_date: today });
-    toast(`Checked in: ${habit.title}`);
+    const { checkin } = await api.post(`/api/habits/${habit.id}/checkins`, { checkin_date: today });
+    toast(`Checked in: ${habit.title}`, { action: { label: 'Undo', onClick: () => undo(checkin.id, habit.title) } });
   } catch (err) {
     if (!(err instanceof ApiError && err.status === 409)) {
       button.disabled = false;
@@ -69,6 +79,15 @@ async function checkIn(habit, button) {
   }
   await load();
   buddy?.mascot.react('happy');
+}
+
+function undoButton(checkinId, title) {
+  const b = el('button', { class: 'btn btn-ghost btn-sm', text: 'Undo', attrs: { type: 'button', 'aria-label': `Undo today's check-in: ${title}` } });
+  b.addEventListener('click', () => {
+    b.disabled = true;
+    undo(checkinId, title);
+  });
+  return b;
 }
 
 // Offer a freeze when yesterday was a missed due day right after a done
@@ -96,8 +115,14 @@ async function freezeYesterday(habit, button) {
 function habitCard(habit) {
   const isDone = doneToday(habit);
   const resting = !isDone && !dueToday(habit);
+  const todays = habit.latest_checkins.find((c) => c.checkin_date === today);
   const action = isDone
-    ? el('span', { class: 'checked-stamp', text: '✓ done today' })
+    ? el(
+        'div',
+        { class: 'done-group' },
+        el('span', { class: 'checked-stamp', text: '✓ done today' }),
+        todays ? undoButton(todays.id, habit.title) : null,
+      )
     : el('button', {
         class: `btn btn-sm ${resting ? 'btn-ghost' : 'btn-accent'}`,
         text: resting ? 'Do it anyway' : 'Check in',

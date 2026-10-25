@@ -76,7 +76,9 @@ router.get('/mine', async (req, res) => {
               (SELECT COUNT(*) FROM checkins c WHERE c.habit_id = h.id) AS checkin_count,
               (SELECT MAX(checkin_date) FROM checkins c WHERE c.habit_id = h.id) AS last_checkin,
               (SELECT group_concat(checkin_date) FROM checkins c
-                WHERE c.habit_id = h.id AND c.checkin_date >= date('now', '-40 days')) AS recent_dates
+                WHERE c.habit_id = h.id AND c.checkin_date >= date('now', '-40 days')) AS recent_dates,
+              (SELECT group_concat(id || ':' || checkin_date) FROM checkins c
+                WHERE c.habit_id = h.id AND c.checkin_date >= date('now', '-2 days')) AS latest_entries
          FROM habits h JOIN users u ON u.id = h.user_id
         WHERE h.user_id = ?
         ORDER BY h.created_at DESC, h.id DESC`,
@@ -99,6 +101,11 @@ router.get('/mine', async (req, res) => {
         ...serializeHabit(row, req.user),
         streak: schedule.streaks(row, done, frozen),
         recent_freezes: frozen.filter((d) => d >= recentStart).sort(),
+        // Ids of the last few check-ins, so the dashboard can undo today's.
+        latest_checkins: (row.latest_entries ? row.latest_entries.split(',') : []).map((e) => {
+          const [id, date] = e.split(':');
+          return { id: Number(id), checkin_date: date };
+        }),
         week_count: done.filter((d) => schedule.weekIndex(schedule.dayNumber(d)) === thisWeek).length,
       };
     }),
