@@ -12,6 +12,8 @@ const today = localISODate();
 let habits = [];
 let freezesLeft = 0;
 let buddy = null; // { node, mascot, bubble }
+let arranging = false;
+let archivedList = null; // null = not loaded / hidden
 let chainYear = Number(today.slice(0, 4));
 let chainDays = [];
 
@@ -156,6 +158,65 @@ async function freezeYesterday(habit, button) {
   }
 }
 
+// ---- arrange (drag and drop, plus up/down buttons for keyboards) ----------------
+
+async function saveOrder() {
+  try {
+    await api.put('/api/habits/order', { ids: habits.map((h) => h.id) });
+  } catch (err) {
+    toast(errorMessage(err), { error: true });
+    await load();
+  }
+}
+
+function move(habit, by) {
+  const from = habits.indexOf(habit);
+  const to = from + by;
+  if (to < 0 || to >= habits.length) return;
+  habits.splice(from, 1);
+  habits.splice(to, 0, habit);
+  render();
+  saveOrder();
+  $(`[data-arrange="${habit.id}"][data-dir="${by < 0 ? 'up' : 'down'}"]`)?.focus();
+}
+
+function arrangeTools(habit) {
+  const i = habits.indexOf(habit);
+  const up = el('button', { class: 'btn btn-ghost btn-sm', text: '↑', dataset: { arrange: String(habit.id), dir: 'up' }, attrs: { type: 'button', 'aria-label': `Move ${habit.title} up` } });
+  const down = el('button', { class: 'btn btn-ghost btn-sm', text: '↓', dataset: { arrange: String(habit.id), dir: 'down' }, attrs: { type: 'button', 'aria-label': `Move ${habit.title} down` } });
+  up.disabled = i === 0;
+  down.disabled = i === habits.length - 1;
+  up.addEventListener('click', () => move(habit, -1));
+  down.addEventListener('click', () => move(habit, 1));
+  return el('div', { class: 'arrange-tools' }, el('span', { class: 'grip', text: '⠿ drag', attrs: { 'aria-hidden': 'true' } }), up, down);
+}
+
+let dragging = null;
+
+function makeDraggable(card, habit) {
+  card.draggable = true;
+  card.addEventListener('dragstart', (e) => {
+    dragging = habit;
+    card.classList.add('is-dragging');
+    e.dataTransfer.effectAllowed = 'move';
+  });
+  card.addEventListener('dragend', () => {
+    dragging = null;
+    card.classList.remove('is-dragging');
+  });
+  card.addEventListener('dragover', (e) => {
+    if (dragging && dragging !== habit) e.preventDefault();
+  });
+  card.addEventListener('drop', (e) => {
+    e.preventDefault();
+    if (!dragging || dragging === habit) return;
+    habits.splice(habits.indexOf(dragging), 1);
+    habits.splice(habits.indexOf(habit) + (e.offsetY > card.offsetHeight / 2 ? 1 : 0), 0, dragging);
+    render();
+    saveOrder();
+  });
+}
+
 function habitCard(habit) {
   const isDone = doneToday(habit);
   const resting = !isDone && !dueToday(habit);
@@ -183,9 +244,10 @@ function habitCard(habit) {
     ? el('p', { class: 'mono muted', text: `${habit.week_count} of ${habit.schedule.times} this week` })
     : null;
 
-  return el(
+  const card = el(
     'article',
-    { class: 'card tilt habit-card' },
+    { class: `card habit-card${arranging ? ' is-arranging' : ' tilt'}` },
+    arranging ? arrangeTools(habit) : null,
     el('div', { class: 'meta' }, categoryChip(habit.category), el('span', { class: 'schedule', text: scheduleLabel(habit.schedule) }), visibilityLabel(habit.is_public)),
     el(
       'div',
@@ -209,6 +271,8 @@ function habitCard(habit) {
       measured && !isDone ? null : action,
     ),
   );
+  if (arranging) makeDraggable(card, habit);
+  return card;
 }
 
 async function addHabit() {
@@ -285,10 +349,76 @@ function render() {
     body = el('div', { class: 'grid' }, habits.map(habitCard));
   }
 
+  const arrange = el('button', { class: 'btn btn-ghost btn-sm', text: arranging ? 'Done arranging' : 'Arrange', attrs: { type: 'button', 'aria-pressed': String(arranging) } });
+  arrange.hidden = habits.length < 2;
+  arrange.addEventListener('click', () => {
+    arranging = !arranging;
+    render();
+  });
+  const showArchived = el('button', { class: 'btn btn-ghost btn-sm', text: archivedList ? 'Hide archived' : 'Archived', attrs: { type: 'button' } });
+  showArchived.addEventListener('click', toggleArchived);
+
   main.replaceChildren(
     head,
-    el('section', { class: 'section' }, el('div', { class: 'section-head' }, el('h2', { text: 'Your habits' }), el('span', { class: 'mono muted', text: `${habits.length} total` })), body),
+    el(
+      'section',
+      { class: 'section' },
+      el(
+        'div',
+        { class: 'section-head' },
+        el('h2', { text: 'Your habits' }),
+        el('div', { class: 'section-tools' }, el('span', { class: 'mono muted', text: `${habits.length} active` }), arrange, showArchived),
+      ),
+      body,
+      archivedList ? archivedSection() : null,
+    ),
     habits.length ? el('section', { class: 'section', attrs: { id: 'chain' } }, wallCalendar()) : null,
+  );
+}
+
+// ---- archived habits -----------------------------------------------------------
+
+async function toggleArchived() {
+  if (archivedList) {
+    archivedList = null;
+  } else {
+    try {
+      ({ habits: archivedList } = await api.get('/api/habits/mine?archived=1'));
+    } catch (err) {
+      toast(errorMessage(err), { error: true });
+      return;
+    }
+  }
+  render();
+}
+
+function archivedSection() {
+  return el(
+    'div',
+    { class: 'archived section' },
+    el('h3', { text: 'Archived' }),
+    archivedList.length === 0
+      ? el('p', { class: 'muted', text: 'Nothing archived. Archive a habit from its page to pause it without losing its history.' })
+      : el(
+          'ul',
+          { class: 'archived-list' },
+          archivedList.map((h) => {
+            const restore = el('button', { class: 'btn btn-sm', text: 'Restore', attrs: { type: 'button', 'aria-label': `Restore ${h.title}` } });
+            restore.addEventListener('click', async () => {
+              restore.disabled = true;
+              try {
+                await api.patch(`/api/habits/${h.id}`, { archived: false });
+                toast(`Restored: ${h.title}`);
+                archivedList = archivedList.filter((x) => x.id !== h.id);
+                await load();
+              } catch (err) {
+                restore.disabled = false;
+                toast(errorMessage(err), { error: true });
+              }
+            });
+            return el('li', {}, el('a', { text: h.title, attrs: { href: `/habit.html?id=${h.id}` } }), el('span', { class: 'mono muted', text: `${h.checkin_count} check-ins` }), restore);
+          }),
+        ),
   );
 }
 

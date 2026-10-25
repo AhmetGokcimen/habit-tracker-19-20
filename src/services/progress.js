@@ -40,6 +40,7 @@ async function load(userId, from, to) {
 }
 
 const createdDay = (habit) => schedule.dayNumber(habit.created_at.slice(0, 10));
+const lastDay = (habit) => (habit.archived_at ? schedule.dayNumber(habit.archived_at.slice(0, 10)) : Infinity);
 
 /**
  * One entry per day: how many habits were due and how many of those were done.
@@ -53,7 +54,7 @@ function days({ habits, done, frozen }, from, to) {
     let kept = 0;
     let frozenCount = 0;
     for (const h of habits) {
-      if (n < createdDay(h)) continue;
+      if (n < createdDay(h) || n > lastDay(h)) continue;
       const isDone = done.get(h.id)?.has(n) ?? false;
       if (h.frequency === 'weekly' ? !isDone : !schedule.isDueOn(h, n) && !isDone) continue;
       due += 1;
@@ -69,22 +70,24 @@ function days({ habits, done, frozen }, from, to) {
 function perHabit({ habits, done }, from, to) {
   return habits.map((h) => {
     const start = Math.max(from, createdDay(h));
-    const doneDays = [...(done.get(h.id) ?? [])].filter((n) => n >= start && n <= to);
+    const end = Math.min(to, lastDay(h));
+    const doneDays = [...(done.get(h.id) ?? [])].filter((n) => n >= start && n <= end);
     let expected = 0;
     let counted = 0;
     if (h.frequency === 'weekly') {
-      for (let w = schedule.weekIndex(start); w <= schedule.weekIndex(to); w++) {
+      for (let w = schedule.weekIndex(start); w <= schedule.weekIndex(end); w++) {
         const inWeek = doneDays.filter((n) => schedule.weekIndex(n) === w).length;
         expected += h.weekly_target;
         counted += Math.min(inWeek, h.weekly_target);
       }
     } else {
-      for (let n = start; n <= to; n++) if (schedule.isDueOn(h, n)) expected += 1;
+      for (let n = start; n <= end; n++) if (schedule.isDueOn(h, n)) expected += 1;
       counted = Math.min(doneDays.length, expected);
     }
     return {
       id: h.id,
       title: h.title,
+      archived: h.archived_at !== null,
       category: h.category,
       done: doneDays.length,
       expected,

@@ -56,7 +56,11 @@ CREATE TABLE IF NOT EXISTS habits (
   -- Measurable habits: a day counts as done when a check-in's amount reaches
   -- target_count ("8 glasses"). Plain habits have target 1 and no unit.
   target_count  INTEGER NOT NULL DEFAULT 1 CHECK (target_count BETWEEN 1 AND 1000),
-  unit          TEXT    NOT NULL DEFAULT '' CHECK (length(unit) <= 20)
+  unit          TEXT    NOT NULL DEFAULT '' CHECK (length(unit) <= 20),
+  -- Archived habits leave the dashboard and Explore but keep their history.
+  archived_at   TEXT,
+  -- Owner-defined order on the dashboard (ascending).
+  position      INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_habits_user ON habits(user_id);
 CREATE INDEX IF NOT EXISTS idx_habits_public_category ON habits(is_public, category);

@@ -11,6 +11,7 @@ const { validate } = require('../middleware/validate');
 const { requireAuth } = require('../middleware/authenticate');
 const { authorize } = require('../middleware/authorize');
 const { moderationAudit } = require('../services/auditLog');
+const { badRequest } = require('../utils/httpError');
 const schedule = require('../services/schedule');
 const { freezesByHabit, freezesLeft } = require('../services/freezes');
 
@@ -34,6 +35,7 @@ function serializeHabit(row, viewer = null) {
     owner: { id: row.user_id, username: row.owner_username },
     created_at: row.created_at,
     updated_at: row.updated_at,
+    archived: row.archived_at !== null && row.archived_at !== undefined,
     ...(viewer && viewer.id === row.user_id && { reminder_time: row.reminder_time ?? null }),
     ...(row.comment_count !== undefined && { comment_count: row.comment_count }),
     ...(row.checkin_count !== undefined && { checkin_count: row.checkin_count }),
@@ -54,7 +56,7 @@ router.get('/', validate({ query: schemas.habitSearch }), async (req, res) => {
     `SELECT h.*, u.username AS owner_username,
             (SELECT COUNT(*) FROM comments c WHERE c.habit_id = h.id) AS comment_count
        FROM habits h JOIN users u ON u.id = h.user_id
-      WHERE h.is_public = 1
+      WHERE h.is_public = 1 AND h.archived_at IS NULL
         AND (?1 IS NULL OR h.category = ?1)
         AND (?2 IS NULL OR h.title LIKE ?2 ESCAPE '\\' OR h.description LIKE ?2 ESCAPE '\\')
       ORDER BY h.created_at DESC, h.id DESC
@@ -71,7 +73,8 @@ router.get('/', validate({ query: schemas.habitSearch }), async (req, res) => {
 
 // The caller's own habits (public and private), with private check-in stats
 // and streaks computed from the full history.
-router.get('/mine', async (req, res) => {
+router.get('/mine', validate({ query: schemas.mineQuery }), async (req, res) => {
+  const archived = req.valid.query.archived === '1';
   const [rows, dates, freezes, left] = await Promise.all([
     db.all(
       `SELECT h.*, u.username AS owner_username,
@@ -83,9 +86,9 @@ router.get('/mine', async (req, res) => {
               (SELECT group_concat(id || ':' || checkin_date || ':' || amount) FROM checkins c
                 WHERE c.habit_id = h.id AND c.checkin_date >= date('now', '-2 days')) AS latest_entries
          FROM habits h JOIN users u ON u.id = h.user_id
-        WHERE h.user_id = ?
-        ORDER BY h.created_at DESC, h.id DESC`,
-      [req.user.id],
+        WHERE h.user_id = ? AND (h.archived_at IS NOT NULL) = ?
+        ORDER BY h.position, h.created_at DESC, h.id DESC`,
+      [req.user.id, archived ? 1 : 0],
     ),
     db.all(
       `SELECT c.habit_id, c.checkin_date FROM checkins c JOIN habits h ON h.id = c.habit_id
@@ -132,10 +135,12 @@ router.post('/', validate({ body: schemas.habitCreate }), async (req, res) => {
   const { title, description, category, is_public, reminder_time, target_count, unit } = req.valid.body;
   const { frequency, days_mask, weekly_target } = schedule.toColumns(req.valid.body.schedule);
   // Owner is always the authenticated user, never a value from the request.
+  // New habits go to the top of the owner's list.
   const { lastInsertRowid } = await db.run(
     `INSERT INTO habits (user_id, title, description, category, is_public, frequency, days_mask, weekly_target,
-                         reminder_time, target_count, unit)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                         reminder_time, target_count, unit, position)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
+             (SELECT COALESCE(MIN(position), 1) - 1 FROM habits WHERE user_id = ?1))`,
     [req.user.id, title, description, category, is_public ? 1 : 0, frequency, days_mask, weekly_target,
       reminder_time, target_count, unit],
   );
@@ -146,14 +151,31 @@ router.post('/', validate({ body: schemas.habitCreate }), async (req, res) => {
   res.status(201).json({ habit: serializeHabit(row, req.user) });
 });
 
+// Reorder: the body must list exactly the caller's active habits. Every
+// UPDATE is also scoped to user_id, so foreign ids can never be touched.
+router.put('/order', validate({ body: schemas.habitOrder }), async (req, res) => {
+  const { ids } = req.valid.body;
+  const own = await db.all('SELECT id FROM habits WHERE user_id = ? AND archived_at IS NULL', [req.user.id]);
+  const ownIds = new Set(own.map((r) => r.id));
+  if (ids.length !== ownIds.size || !ids.every((id) => ownIds.has(id))) {
+    throw badRequest('Send the complete list of your active habits');
+  }
+  await db.batch(ids.map((id, i) => ['UPDATE habits SET position = ? WHERE id = ? AND user_id = ?', [i, id, req.user.id]]));
+  res.status(204).end();
+});
+
 router.get('/:id', authorize('habit', 'read'), async (req, res) => {
   const owner = await db.get('SELECT username FROM users WHERE id = ?', [req.resource.user_id]);
   res.json({ habit: serializeHabit({ ...req.resource, owner_username: owner.username }, req.user) });
 });
 
 router.patch('/:id', authorize('habit', 'update'), validate({ body: schemas.habitUpdate }), async (req, res) => {
-  const { schedule: newSchedule, ...updates } = req.valid.body;
+  const { schedule: newSchedule, archived, ...updates } = req.valid.body;
   if ('is_public' in updates) updates.is_public = updates.is_public ? 1 : 0;
+  if (archived !== undefined) {
+    // Keep the original archive date when archiving twice.
+    updates.archived_at = archived ? req.resource.archived_at ?? new Date().toISOString().slice(0, 10) : null;
+  }
   if (newSchedule) Object.assign(updates, schedule.toColumns(newSchedule));
 
   // Column names come from the strict schema's fixed key set (and toColumns),

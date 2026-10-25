@@ -60,7 +60,19 @@ function ownerTools() {
         }
       }),
     );
-    tools.push(edit, share);
+    const archive = el('button', { class: 'btn btn-sm', text: habit.archived ? 'Restore' : 'Archive', attrs: { type: 'button' } });
+    archive.addEventListener('click', () =>
+      withBusy(archive, async () => {
+        try {
+          ({ habit } = await api.patch(`/api/habits/${habit.id}`, { archived: !habit.archived }));
+          toast(habit.archived ? 'Archived — it keeps its history and can be restored any time' : 'Restored');
+          await refresh();
+        } catch (err) {
+          toast(errorMessage(err), { error: true });
+        }
+      }),
+    );
+    tools.push(edit, share, archive);
   }
   if (isOwner() || isAdmin()) {
     const del = el('button', { class: 'btn btn-sm btn-danger', text: isOwner() ? 'Delete' : 'Remove habit', attrs: { type: 'button' } });
@@ -92,6 +104,7 @@ function header() {
       {},
       el('p', { class: 'eyebrow' }, categoryChip(habit.category), ' ', visibilityLabel(habit.is_public)),
       el('h1', { class: 'detail-title section', text: habit.title }),
+      habit.archived ? el('p', { class: 'archived-note', text: 'Archived · read-only until restored' }) : null,
       el('p', { class: 'byline', text: `by @${habit.owner.username} · ${scheduleLabel(habit.schedule)}${habit.target_count > 1 ? ` · ${habit.target_count} ${habit.unit} a day` : ''} · since ${formatDate(habit.created_at)}` }),
       habit.description ? el('p', { class: 'description', text: habit.description }) : null,
     ),
@@ -115,7 +128,7 @@ function heatmap() {
     const ice = !done.has(date) && frozen.has(date);
     const state = done.has(date) ? ' is-done' : ice ? ' is-frozen' : off ? ' is-off' : '';
     const title = `${formatDate(date)}${done.has(date) ? ' — checked in' : ice ? ' — frozen' : ''}`;
-    if (isOwner() && date <= today) {
+    if (isOwner() && !habit.archived && date <= today) {
       // The owner can fill in or clear any past day straight from the calendar.
       const cell = el('button', {
         class: `day day-btn${state}`,
@@ -331,8 +344,8 @@ function checkinSection() {
     ),
     el('p', { class: 'mono muted', text: isOwner() ? 'Last 12 weeks · tap a day to fill it in or clear it · private to you and admins' : 'Last 12 weeks · private to you and admins' }),
     el('div', { class: 'section' }, heatmap()),
-    isOwner() ? freezePanel() : null,
-    isOwner() ? el('div', { class: 'section' }, checkinForm()) : null,
+    isOwner() && !habit.archived ? freezePanel() : null,
+    isOwner() && !habit.archived ? el('div', { class: 'section' }, checkinForm()) : null,
     el(
       'div',
       { class: 'section' },

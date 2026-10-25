@@ -177,3 +177,54 @@ describe('F4 — reminder times', () => {
     assert.equal((await alice.get(`/api/habits/${h.id}`)).body.habit.reminder_time, '21:15');
   });
 });
+
+describe('F9 — archive and order', () => {
+  test('archived habits leave /mine and Explore, keep their data, and take no new check-ins', async () => {
+    const h = (await alice.post('/api/habits').send({ title: 'Archive me please', category: 'other', is_public: true })).body.habit;
+    const today = new Date().toISOString().slice(0, 10);
+    await alice.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: '2026-01-05' });
+
+    const res = await alice.patch(`/api/habits/${h.id}`).send({ archived: true });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.habit.archived, true);
+
+    assert.ok(!(await alice.get('/api/habits/mine')).body.habits.some((x) => x.id === h.id));
+    assert.ok((await alice.get('/api/habits/mine?archived=1')).body.habits.some((x) => x.id === h.id));
+    assert.equal((await bob.get('/api/habits?q=Archive%20me')).body.habits.length, 0);
+    assert.equal((await alice.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: today })).status, 403);
+    assert.equal((await alice.get(`/api/habits/${h.id}/checkins`)).body.checkins.length, 1);
+
+    // Only the owner can archive; restoring brings it back.
+    assert.equal((await bob.patch(`/api/habits/${h.id}`).send({ archived: false })).status, 403);
+    assert.equal((await alice.patch(`/api/habits/${h.id}`).send({ archived: false })).body.habit.archived, false);
+    assert.equal((await alice.get('/api/habits/mine?archived=yes')).status, 400);
+  });
+
+  test('order takes exactly the caller\'s active habits and nothing else', async () => {
+    await createUser('sorter');
+    const sorter = await loginAs(app, 'sorter');
+    const ids = [];
+    for (const t of ['A', 'B', 'C']) ids.push((await sorter.post('/api/habits').send({ title: t, category: 'other' })).body.habit.id);
+    // Newest first by default.
+    assert.deepEqual((await sorter.get('/api/habits/mine')).body.habits.map((h) => h.title), ['C', 'B', 'A']);
+
+    assert.equal((await sorter.put('/api/habits/order').send({ ids })).status, 204);
+    assert.deepEqual((await sorter.get('/api/habits/mine')).body.habits.map((h) => h.title), ['A', 'B', 'C']);
+
+    const foreign = alicePublic.id;
+    const bad = [
+      { ids: [ids[0], ids[1]] },
+      { ids: [...ids, foreign] },
+      { ids: [ids[0], ids[1], foreign] },
+      { ids: [ids[0], ids[0], ids[1]] },
+      { ids: [] },
+      { ids: ['1', '2', '3'] },
+      { ids, user_id: 1 },
+    ];
+    for (const body of bad) {
+      assert.equal((await sorter.put('/api/habits/order').send(body)).status, 400, JSON.stringify(body));
+    }
+    // Alice's habit was never moved.
+    assert.equal((await db.get('SELECT position FROM habits WHERE id = ?', [foreign])).position <= 0, true);
+  });
+});

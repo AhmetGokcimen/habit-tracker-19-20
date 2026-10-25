@@ -2094,3 +2094,69 @@ textarea {
 .log-item .amount.is-met {
   color: var(--success);
 }
+
+/* ---------- Arrange & archive ---------- */
+
+.section-tools {
+  display: flex;
+  align-items: center;
+  gap: var(--s-2);
+}
+
+.arrange-tools {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: var(--s-1);
+}
+
+.arrange-tools .grip {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--ink-soft);
+  cursor: grab;
+}
+
+.habit-card.is-arranging {
+  cursor: grab;
+  outline: 1.5px dashed var(--ink-soft);
+  outline-offset: 3px;
+}
+
+.habit-card.is-dragging {
+  opacity: 0.45;
+}
+
+.archived-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: var(--s-2);
+}
+
+.archived-list li {
+  display: flex;
+  align-items: center;
+  gap: var(--s-3);
+  padding: var(--s-3) var(--s-4);
+  border-radius: var(--radius-sm);
+  background: var(--card);
+}
+
+.archived-list a {
+  flex: 1;
+  font-weight: 700;
+}
+
+.archived-note {
+  display: inline-block;
+  margin-top: var(--s-2);
+  padding: var(--s-1) var(--s-3);
+  border-radius: 999px;
+  background: var(--paper-deep);
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+}

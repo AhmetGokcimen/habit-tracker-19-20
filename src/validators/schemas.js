@@ -91,9 +91,22 @@ const habitCreate = z.strictObject({
 });
 
 const habitUpdate = z
-  .strictObject(habitFields)
+  .strictObject({ ...habitFields, archived: z.boolean() })
   .partial()
   .refine((body) => Object.keys(body).length > 0, 'Provide at least one field to update');
+
+// The caller's complete list of active habit ids, in the new order.
+const habitOrder = z.strictObject({
+  ids: z
+    .array(z.number().int().min(1).max(9_999_999_999))
+    .min(1)
+    .max(200)
+    .refine((ids) => new Set(ids).size === ids.length, 'Each habit may appear only once'),
+});
+
+const mineQuery = z.strictObject({
+  archived: z.enum(['0', '1']).default('0'),
+});
 
 // Query strings: repeated keys (?q=a&q=b) arrive as arrays and fail z.string().
 const habitSearch = z.strictObject({
@@ -202,6 +215,8 @@ module.exports = {
   habitCreate,
   habitUpdate,
   habitSearch,
+  habitOrder,
+  mineQuery,
   checkinCreate,
   checkinUpdate,
   freezeCreate,

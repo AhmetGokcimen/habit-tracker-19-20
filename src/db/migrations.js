@@ -19,11 +19,15 @@ const ADDED_COLUMNS = [
   ['habits', 'target_count', 'INTEGER NOT NULL DEFAULT 1 CHECK (target_count BETWEEN 1 AND 1000)'],
   ['habits', 'unit', "TEXT NOT NULL DEFAULT '' CHECK (length(unit) <= 20)"],
   ['checkins', 'amount', 'INTEGER NOT NULL DEFAULT 1 CHECK (amount BETWEEN 1 AND 100000)'],
+  ['habits', 'archived_at', 'TEXT'],
+  ['habits', 'position', 'INTEGER NOT NULL DEFAULT 0'],
 ];
 
 // Indexes and triggers that use added columns. They run after the columns
 // exist, so they cannot live in schema.sql. Every statement is IF NOT EXISTS.
-const AFTER_COLUMNS = '';
+const AFTER_COLUMNS = `
+CREATE INDEX IF NOT EXISTS idx_habits_user_order ON habits(user_id, archived_at, position);
+`;
 
 async function migrate(client) {
   for (const [table, column, definition] of ADDED_COLUMNS) {
