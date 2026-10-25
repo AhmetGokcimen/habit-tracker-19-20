@@ -50,7 +50,9 @@ CREATE TABLE IF NOT EXISTS habits (
   -- Columns added after the first release are also listed in db/migrations.js.
   frequency     TEXT    NOT NULL DEFAULT 'daily' CHECK (frequency IN ('daily', 'weekdays', 'weekly')),
   days_mask     INTEGER NOT NULL DEFAULT 127 CHECK (days_mask BETWEEN 1 AND 127),
-  weekly_target INTEGER NOT NULL DEFAULT 7 CHECK (weekly_target BETWEEN 1 AND 7)
+  weekly_target INTEGER NOT NULL DEFAULT 7 CHECK (weekly_target BETWEEN 1 AND 7),
+  -- Optional local reminder time "HH:MM". Private to the owner.
+  reminder_time TEXT    CHECK (reminder_time IS NULL OR reminder_time GLOB '[0-2][0-9]:[0-5][0-9]')
 );
 CREATE INDEX IF NOT EXISTS idx_habits_user ON habits(user_id);
 CREATE INDEX IF NOT EXISTS idx_habits_public_category ON habits(is_public, category);

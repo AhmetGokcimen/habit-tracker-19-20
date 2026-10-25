@@ -70,6 +70,11 @@ const habitFields = {
   category: z.enum(CATEGORIES, 'Unknown category'),
   is_public: z.boolean(),
   schedule,
+  // Local wall-clock time, 00:00-23:59, or null for no reminder.
+  reminder_time: z
+    .string()
+    .regex(/^([01][0-9]|2[0-3]):[0-5][0-9]$/, 'Use a time like 08:30')
+    .nullable(),
 };
 
 const habitCreate = z.strictObject({
@@ -77,6 +82,7 @@ const habitCreate = z.strictObject({
   description: habitFields.description.default(''),
   is_public: habitFields.is_public.default(false),
   schedule: schedule.default({ type: 'daily' }),
+  reminder_time: habitFields.reminder_time.default(null),
 });
 
 const habitUpdate = z

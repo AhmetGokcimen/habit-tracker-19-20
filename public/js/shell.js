@@ -79,6 +79,8 @@ export async function initPage({ active } = {}) {
   renderTopbar(user, active);
   ensureToastRegion();
   enableTilt();
+  // Loaded lazily: reminders.js imports this module.
+  import('./reminders.js').then((m) => m.startReminders()).catch(() => {});
   return user;
 }
 

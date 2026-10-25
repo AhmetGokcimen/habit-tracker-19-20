@@ -151,3 +151,29 @@ describe('F7 — search and filter', () => {
     assert.equal((await alice.get('/api/habits?sort=password')).status, 400);
   });
 });
+
+describe('F4 — reminder times', () => {
+  test('reminder time is validated and stored', async () => {
+    const res = await alice.post('/api/habits').send({ title: 'Vitamins', category: 'health', reminder_time: '08:30' });
+    assert.equal(res.status, 201);
+    assert.equal(res.body.habit.reminder_time, '08:30');
+    for (const bad of ['8:30', '24:00', '12:60', '08:30:00', '08:30 ', 'noon', 830]) {
+      const r = await alice.post('/api/habits').send({ title: 'X', category: 'health', reminder_time: bad });
+      assert.equal(r.status, 400, String(bad));
+    }
+    const cleared = await alice.patch(`/api/habits/${res.body.habit.id}`).send({ reminder_time: null });
+    assert.equal(cleared.body.habit.reminder_time, null);
+  });
+
+  test('reminder time is private: other users and search results never see it', async () => {
+    const h = (await alice.post('/api/habits').send({ title: 'Daily sketch', category: 'other', is_public: true, reminder_time: '21:15' })).body.habit;
+    const asBob = await bob.get(`/api/habits/${h.id}`);
+    assert.equal('reminder_time' in asBob.body.habit, false);
+    const search = await bob.get('/api/habits?q=Daily%20sketch');
+    assert.ok(search.body.habits.length >= 1);
+    assert.ok(search.body.habits.every((x) => !('reminder_time' in x)));
+    const asAdmin = await admin.get(`/api/habits/${h.id}`);
+    assert.equal('reminder_time' in asAdmin.body.habit, false);
+    assert.equal((await alice.get(`/api/habits/${h.id}`)).body.habit.reminder_time, '21:15');
+  });
+});

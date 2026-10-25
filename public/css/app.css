@@ -578,10 +578,6 @@ textarea {
   outline-offset: 2px;
 }
 
-.schedule-field [hidden] {
-  display: none;
-}
-
 .schedule {
   font-family: var(--font-mono);
   font-size: 0.75rem;
@@ -1556,4 +1552,8 @@ textarea {
   ::view-transition-new(root) {
     animation: none;
   }
+}
+
+.input-time {
+  max-width: 10rem;
 }

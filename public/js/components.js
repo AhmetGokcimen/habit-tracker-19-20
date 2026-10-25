@@ -112,6 +112,8 @@ export function habitDialog(habit = null) {
     );
     const isPublic = el('input', { attrs: { type: 'checkbox', name: 'is_public', id: 'hf-public' } });
     const sched = scheduleField(habit?.schedule ?? { type: 'daily' });
+    const reminder = el('input', { class: 'input input-time', attrs: { id: 'hf-reminder', name: 'reminder_time', type: 'time' } });
+    reminder.value = habit?.reminder_time ?? '';
 
     if (habit) {
       title.value = habit.title;
@@ -129,6 +131,7 @@ export function habitDialog(habit = null) {
       field('description', 'Notes (optional)', description, 'Up to 1000 characters.'),
       field('category', 'Category', category),
       sched.node,
+      field('reminder_time', 'Remind me at (optional)', reminder, 'A reminder appears while Habit Tracker is open in a tab. Only you see this time.'),
       el(
         'div',
         { class: 'field', dataset: { field: 'is_public' } },
@@ -163,6 +166,7 @@ export function habitDialog(habit = null) {
         category: category.value,
         is_public: isPublic.checked,
         schedule: sched.value(),
+        reminder_time: reminder.value ? reminder.value.slice(0, 5) : null,
       };
       await withBusy(save, async () => {
         try {

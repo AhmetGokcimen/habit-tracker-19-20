@@ -15,6 +15,7 @@ const ADDED_COLUMNS = [
   ['habits', 'frequency', "TEXT NOT NULL DEFAULT 'daily' CHECK (frequency IN ('daily', 'weekdays', 'weekly'))"],
   ['habits', 'days_mask', 'INTEGER NOT NULL DEFAULT 127 CHECK (days_mask BETWEEN 1 AND 127)'],
   ['habits', 'weekly_target', 'INTEGER NOT NULL DEFAULT 7 CHECK (weekly_target BETWEEN 1 AND 7)'],
+  ['habits', 'reminder_time', "TEXT CHECK (reminder_time IS NULL OR reminder_time GLOB '[0-2][0-9]:[0-5][0-9]')"],
 ];
 
 // Indexes and triggers that use added columns. They run after the columns
