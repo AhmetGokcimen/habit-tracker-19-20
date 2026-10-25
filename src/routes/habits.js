@@ -11,7 +11,7 @@ const { validate } = require('../middleware/validate');
 const { requireAuth } = require('../middleware/authenticate');
 const { authorize } = require('../middleware/authorize');
 const { moderationAudit } = require('../services/auditLog');
-const { badRequest } = require('../utils/httpError');
+const { badRequest, conflict } = require('../utils/httpError');
 const schedule = require('../services/schedule');
 const { freezesByHabit, freezesLeft } = require('../services/freezes');
 
@@ -19,6 +19,11 @@ const router = express.Router();
 router.use(requireAuth);
 
 const PAGE_SIZE = 20;
+// Per-user cap (active + archived) so creating or copying cannot be used to
+// flood the database. Checked inside the INSERT, so parallel requests cannot
+// exceed it.
+const MAX_HABITS = 100;
+const tooManyHabits = () => conflict(`You can keep at most ${MAX_HABITS} habits — delete or reuse an old one`);
 
 // Explicit allow-list of fields sent to clients (never emails or hashes).
 // The reminder time reveals a daily routine, so only the owner gets it.
@@ -124,6 +129,22 @@ router.get('/mine', validate({ query: schemas.mineQuery }), async (req, res) => 
   });
 });
 
+// Inserts a habit for userId at the top of their list, unless they already
+// have MAX_HABITS. Column values come from validated input or a stored row.
+async function insertHabit(userId, v) {
+  const { changes, lastInsertRowid } = await db.run(
+    `INSERT INTO habits (user_id, title, description, category, is_public, frequency, days_mask, weekly_target,
+                         reminder_time, target_count, unit, position)
+     SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
+            (SELECT COALESCE(MIN(position), 1) - 1 FROM habits WHERE user_id = ?1)
+      WHERE (SELECT COUNT(*) FROM habits WHERE user_id = ?1) < ?12`,
+    [userId, v.title, v.description, v.category, v.is_public, v.frequency, v.days_mask, v.weekly_target,
+      v.reminder_time, v.target_count, v.unit, MAX_HABITS],
+  );
+  if (changes === 0) throw tooManyHabits();
+  return lastInsertRowid;
+}
+
 function groupDates(rows) {
   const map = new Map();
   for (const { habit_id, checkin_date } of rows) {
@@ -137,15 +158,9 @@ router.post('/', validate({ body: schemas.habitCreate }), async (req, res) => {
   const { title, description, category, is_public, reminder_time, target_count, unit } = req.valid.body;
   const { frequency, days_mask, weekly_target } = schedule.toColumns(req.valid.body.schedule);
   // Owner is always the authenticated user, never a value from the request.
-  // New habits go to the top of the owner's list.
-  const { lastInsertRowid } = await db.run(
-    `INSERT INTO habits (user_id, title, description, category, is_public, frequency, days_mask, weekly_target,
-                         reminder_time, target_count, unit, position)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
-             (SELECT COALESCE(MIN(position), 1) - 1 FROM habits WHERE user_id = ?1))`,
-    [req.user.id, title, description, category, is_public ? 1 : 0, frequency, days_mask, weekly_target,
-      reminder_time, target_count, unit],
-  );
+  const lastInsertRowid = await insertHabit(req.user.id, {
+    title, description, category, is_public: is_public ? 1 : 0, frequency, days_mask, weekly_target, reminder_time, target_count, unit,
+  });
   const row = await db.get(
     'SELECT h.*, u.username AS owner_username FROM habits h JOIN users u ON u.id = h.user_id WHERE h.id = ?',
     [lastInsertRowid],
@@ -164,6 +179,29 @@ router.put('/order', validate({ body: schemas.habitOrder }), async (req, res) =>
   }
   await db.batch(ids.map((id, i) => ['UPDATE habits SET position = ? WHERE id = ? AND user_id = ?', [i, id, req.user.id]]));
   res.status(204).end();
+});
+
+// "Add to my habits": a private copy of someone else's shared habit (its
+// settings only — never check-ins, comments or the reminder time).
+router.post('/:id/copy', authorize('habit', 'copy'), async (req, res) => {
+  const h = req.resource;
+  const id = await insertHabit(req.user.id, {
+    title: h.title,
+    description: h.description,
+    category: h.category,
+    is_public: 0,
+    frequency: h.frequency,
+    days_mask: h.days_mask,
+    weekly_target: h.weekly_target,
+    reminder_time: null,
+    target_count: h.target_count,
+    unit: h.unit,
+  });
+  const row = await db.get(
+    'SELECT h.*, u.username AS owner_username FROM habits h JOIN users u ON u.id = h.user_id WHERE h.id = ?',
+    [id],
+  );
+  res.status(201).json({ habit: serializeHabit(row, req.user) });
 });
 
 router.get('/:id', authorize('habit', 'read'), async (req, res) => {

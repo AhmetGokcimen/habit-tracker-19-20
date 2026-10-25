@@ -75,6 +75,20 @@ function ownerTools() {
     );
     tools.push(edit, share, archive);
   }
+  if (!isOwner() && habit.is_public && !habit.archived) {
+    const copy = el('button', { class: 'btn btn-sm btn-accent', text: '+ Add to my habits', attrs: { type: 'button' } });
+    copy.addEventListener('click', () =>
+      withBusy(copy, async () => {
+        try {
+          const { habit: mine } = await api.post(`/api/habits/${habit.id}/copy`);
+          toast(`Added “${mine.title}” to your habits (private)`, { action: { label: 'Open', onClick: () => location.assign(`/habit.html?id=${Number(mine.id)}`) } });
+        } catch (err) {
+          toast(errorMessage(err), { error: true });
+        }
+      }),
+    );
+    tools.push(copy);
+  }
   if (isOwner() || isAdmin()) {
     const del = el('button', { class: 'btn btn-sm btn-danger', text: isOwner() ? 'Delete' : 'Remove habit', attrs: { type: 'button' } });
     del.addEventListener('click', async () => {

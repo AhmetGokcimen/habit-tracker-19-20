@@ -228,3 +228,46 @@ describe('F9 — archive and order', () => {
     assert.equal((await db.get('SELECT position FROM habits WHERE id = ?', [foreign])).position <= 0, true);
   });
 });
+
+describe('F14 — copy a shared habit', () => {
+  test('copies settings only, as a private habit of the caller', async () => {
+    const src = (await alice.post('/api/habits').send({
+      title: 'Water', category: 'health', is_public: true, target_count: 8, unit: 'glasses',
+      schedule: { type: 'weekdays', days: [1, 2, 3] }, reminder_time: '07:00',
+    })).body.habit;
+    await alice.post(`/api/habits/${src.id}/checkins`).send({ checkin_date: new Date().toISOString().slice(0, 10), note: 'alice only' });
+    await bob.post(`/api/habits/${src.id}/comments`).send({ body: 'nice' });
+
+    const res = await bob.post(`/api/habits/${src.id}/copy`);
+    assert.equal(res.status, 201);
+    const copy = res.body.habit;
+    assert.equal(copy.owner.username, 'bob');
+    assert.equal(copy.is_public, false);
+    assert.deepEqual([copy.title, copy.target_count, copy.unit], ['Water', 8, 'glasses']);
+    assert.deepEqual(copy.schedule, { type: 'weekdays', days: [1, 2, 3] });
+    assert.equal(copy.reminder_time, null);
+    assert.equal((await bob.get(`/api/habits/${copy.id}/checkins`)).body.checkins.length, 0);
+    assert.equal((await bob.get(`/api/habits/${copy.id}/comments`)).body.comments.length, 0);
+  });
+
+  test('private, own and archived habits cannot be copied', async () => {
+    assert.equal((await bob.post(`/api/habits/${alicePrivate.id}/copy`)).status, 403);
+    assert.equal((await alice.post(`/api/habits/${alicePublic.id}/copy`)).status, 403);
+    const arch = (await alice.post('/api/habits').send({ title: 'Old', category: 'other', is_public: true })).body.habit;
+    await alice.patch(`/api/habits/${arch.id}`).send({ archived: true });
+    assert.equal((await bob.post(`/api/habits/${arch.id}/copy`)).status, 403);
+    assert.equal((await bob.raw.post(`/api/habits/${alicePublic.id}/copy`)).status, 403); // CSRF header
+  });
+
+  test('a user can keep at most 100 habits, even with parallel requests', async () => {
+    await createUser('hoarder2');
+    const h = await loginAs(app, 'hoarder2');
+    const uid = (await db.get("SELECT id FROM users WHERE username = 'hoarder2'")).id;
+    await db.batch(Array.from({ length: 95 }, (_, i) => ['INSERT INTO habits (user_id, title, category) VALUES (?, ?, ?)', [uid, `H${i}`, 'other']]));
+    const results = await Promise.all(Array.from({ length: 10 }, () => h.post('/api/habits').send({ title: 'More', category: 'other' })));
+    assert.equal(results.filter((r) => r.status === 201).length, 5);
+    assert.ok(results.filter((r) => r.status !== 201).every((r) => r.status === 409));
+    assert.equal((await h.post(`/api/habits/${alicePublic.id}/copy`)).status, 409);
+    assert.equal((await db.get('SELECT COUNT(*) AS n FROM habits WHERE user_id = ?', [uid])).n, 100);
+  });
+});

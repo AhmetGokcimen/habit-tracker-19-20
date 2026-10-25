@@ -64,6 +64,8 @@ const policies = {
     // after the habit is made private), and can only be written on public habits.
     listComments: (u, h) => owns(u, h) || isAdmin(u) || h.is_public === 1,
     addComment: (u, h) => h.is_public === 1,
+    // "Add to my habits" from someone else's shared, active habit.
+    copy: (u, h) => h.is_public === 1 && h.archived_at === null && !owns(u, h),
     // Cheering on someone else's shared, active habit.
     react: (u, h) => h.is_public === 1 && h.archived_at === null && !owns(u, h),
   },
