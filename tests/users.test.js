@@ -87,3 +87,30 @@ describe('password change', () => {
     assert.equal(statuses.at(-1), 429);
   });
 });
+
+describe('F3 — badges', () => {
+  test('badges are computed from the caller\'s own numbers', async () => {
+    await createUser('badger');
+    const agent = await loginAs(app, 'badger');
+    let res = await agent.get('/api/users/me');
+    assert.equal(res.status, 200);
+    const first = res.body.badges.find((b) => b.id === 'first-checkin');
+    assert.equal(first.earned, false);
+    assert.deepEqual(first.progress, { value: 0, goal: 1 });
+
+    const h = (await agent.post('/api/habits').send({ title: 'Read', category: 'learning', is_public: true })).body.habit;
+    await agent.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: new Date().toISOString().slice(0, 10) });
+    res = await agent.get('/api/users/me');
+    const earned = res.body.badges.filter((b) => b.earned).map((b) => b.id).sort();
+    assert.deepEqual(earned, ['first-checkin', 'sharer']);
+  });
+
+  test('there is no endpoint to award or claim a badge', async () => {
+    await createUser('claimer');
+    const agent = await loginAs(app, 'claimer');
+    for (const path of ['/api/users/me/badges', '/api/badges']) {
+      assert.equal((await agent.post(path).send({ id: 'streak-100' })).status, 404);
+    }
+    assert.equal((await agent.patch('/api/users/me').send({ badges: ['streak-100'] })).status, 404);
+  });
+});

@@ -6,6 +6,7 @@ import { api, ApiError } from '../api.js';
 import { el, $, formatDate } from '../dom.js';
 import { initPage, toast, showFormErrors, clearFormErrors, withBusy } from '../shell.js';
 import { reveal } from '../motion.js';
+import { badgeTile, announceNewBadges } from '../components.js';
 
 const main = $('#main');
 
@@ -83,7 +84,9 @@ function passwordForm() {
 }
 
 await initPage({ active: 'profile' });
-const { user, stats } = await api.get('/api/users/me');
+const { user, stats, badges } = await api.get('/api/users/me');
+announceNewBadges(user.id, badges);
+const earnedCount = badges.filter((b) => b.earned).length;
 
 main.replaceChildren(
   el(
@@ -92,6 +95,12 @@ main.replaceChildren(
     el('div', {}, el('p', { class: 'eyebrow', text: 'Your account' }), el('h1', { text: `@${user.username}` }), el('p', { class: 'lede', text: 'Your details, your numbers, and your password.' })),
   ),
   ledger(stats),
+  el(
+    'section',
+    { class: 'section', attrs: { 'aria-labelledby': 'badges-heading' } },
+    el('div', { class: 'section-head' }, el('h2', { text: 'Badges', attrs: { id: 'badges-heading' } }), el('span', { class: 'mono muted', text: `${earnedCount} of ${badges.length}` })),
+    el('ul', { class: 'badges' }, badges.map(badgeTile)),
+  ),
   el(
     'div',
     { class: 'profile-grid section' },

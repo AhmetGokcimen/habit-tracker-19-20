@@ -3,7 +3,7 @@
 
 import { api } from './api.js';
 import { el, localISODate, addDays } from './dom.js';
-import { showFormErrors, clearFormErrors, withBusy } from './shell.js';
+import { showFormErrors, clearFormErrors, withBusy, toast } from './shell.js';
 
 export const CATEGORIES = ['health', 'fitness', 'learning', 'productivity', 'mindfulness', 'social', 'other'];
 
@@ -231,4 +231,44 @@ function scheduleField(initial) {
     return { type: 'daily' };
   };
   return { node, value };
+}
+
+// ---- badges ---------------------------------------------------------------------
+
+export function badgeTile(badge) {
+  const { value, goal } = badge.progress;
+  return el(
+    'li',
+    { class: `badge${badge.earned ? ' is-earned' : ''}`, attrs: { title: badge.description } },
+    el('span', { class: 'badge-icon', text: badge.icon, attrs: { 'aria-hidden': 'true' } }),
+    el('strong', { text: badge.title }),
+    el('span', { class: 'hint', text: badge.description }),
+    badge.earned
+      ? el('span', { class: 'badge-state', text: 'Earned' })
+      : el('span', { class: 'badge-progress', vars: { '--p': `${Math.round((value / goal) * 100)}%` }, attrs: { 'aria-label': `${value} of ${goal}` } }),
+  );
+}
+
+/**
+ * Toasts badges earned since the last visit. The list of already-seen badges
+ * is a per-browser convenience in localStorage; the server is the source of
+ * truth for what is earned. The first visit just records the current state.
+ * Returns the newly earned badges.
+ */
+export function announceNewBadges(userId, badges) {
+  const key = `badges-seen:${userId}`;
+  const earned = badges.filter((b) => b.earned).map((b) => b.id);
+  let seen = null;
+  try {
+    const raw = localStorage.getItem(key);
+    const parsed = raw ? JSON.parse(raw) : null;
+    seen = Array.isArray(parsed) ? parsed.filter((id) => typeof id === 'string') : null;
+    localStorage.setItem(key, JSON.stringify(earned));
+  } catch {
+    return [];
+  }
+  if (seen === null) return [];
+  const fresh = badges.filter((b) => b.earned && !seen.includes(b.id));
+  for (const b of fresh) toast(`${b.icon} New badge: ${b.title}`);
+  return fresh;
 }

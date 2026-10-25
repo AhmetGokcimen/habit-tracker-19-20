@@ -4,7 +4,7 @@ import { api, ApiError } from '../api.js';
 import { el, $, localISODate, addDays, formatShortDate, formatDate } from '../dom.js';
 import { initPage, toast, errorMessage } from '../shell.js';
 import { reveal } from '../motion.js';
-import { categoryChip, visibilityLabel, chain, streakBadge, habitDialog, isDue, scheduleLabel } from '../components.js';
+import { categoryChip, visibilityLabel, chain, streakBadge, habitDialog, isDue, scheduleLabel, announceNewBadges } from '../components.js';
 
 const main = $('#main');
 const today = localISODate();
@@ -184,6 +184,16 @@ function render() {
 async function load() {
   ({ habits, freezes_left: freezesLeft } = await api.get('/api/habits/mine'));
   render();
+  checkBadges();
+}
+
+async function checkBadges() {
+  try {
+    const { user, badges } = await api.get('/api/users/me');
+    announceNewBadges(user.id, badges);
+  } catch {
+    // badges are a bonus; the page works without them
+  }
 }
 
 const user = await initPage({ active: 'today' });

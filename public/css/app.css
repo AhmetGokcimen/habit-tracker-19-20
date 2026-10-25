@@ -1175,6 +1175,58 @@ textarea {
 
 /* ---------- Admin ---------- */
 
+/* ---------- Badges ---------- */
+
+.badges {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: var(--s-3);
+}
+
+.badge {
+  display: grid;
+  gap: var(--s-1);
+  align-content: start;
+  padding: var(--s-4);
+  border: 1.5px dashed var(--line);
+  border-radius: var(--radius);
+  background: var(--card);
+  opacity: 0.72;
+}
+
+.badge.is-earned {
+  border-style: solid;
+  border-color: var(--coral);
+  opacity: 1;
+  box-shadow: var(--shadow-1);
+}
+
+.badge-icon {
+  font-size: 1.8rem;
+  line-height: 1;
+  filter: grayscale(1);
+}
+
+.badge.is-earned .badge-icon {
+  filter: none;
+}
+
+.badge-state {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--success);
+  font-weight: 700;
+}
+
+.badge-progress {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--coral) var(--p), var(--paper-deep) var(--p));
+}
+
 .ledger {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

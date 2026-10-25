@@ -13,6 +13,7 @@ const { hashPassword, verifyPassword } = require('../services/authService');
 const { badRequest } = require('../utils/httpError');
 const schedule = require('../services/schedule');
 const { freezesByHabit } = require('../services/freezes');
+const { evaluateBadges } = require('../services/badges');
 
 const router = express.Router();
 router.use(requireAuth);
@@ -26,7 +27,8 @@ router.get('/me', async (req, res) => {
               (SELECT COUNT(*) FROM habits WHERE user_id = ?1 AND is_public = 1) AS public_habits,
               (SELECT COUNT(*) FROM checkins WHERE user_id = ?1) AS checkins,
               (SELECT COUNT(*) FROM checkins WHERE user_id = ?1 AND photo_data IS NOT NULL) AS photos,
-              (SELECT COUNT(*) FROM comments WHERE user_id = ?1) AS comments`,
+              (SELECT COUNT(*) FROM comments WHERE user_id = ?1) AS comments,
+              (SELECT COUNT(*) FROM streak_freezes WHERE user_id = ?1) AS freezes`,
       [id],
     ),
     db.all('SELECT habit_id, checkin_date FROM checkins WHERE user_id = ? ORDER BY habit_id, checkin_date', [id]),
@@ -49,10 +51,8 @@ router.get('/me', async (req, res) => {
     bestCurrentStreak = Math.max(bestCurrentStreak, s.current);
   }
 
-  res.json({
-    user: account,
-    stats: { ...counts, longest_streak: longestStreak, best_current_streak: bestCurrentStreak },
-  });
+  const stats = { ...counts, longest_streak: longestStreak, best_current_streak: bestCurrentStreak };
+  res.json({ user: account, stats, badges: evaluateBadges(stats) });
 });
 
 router.post(
