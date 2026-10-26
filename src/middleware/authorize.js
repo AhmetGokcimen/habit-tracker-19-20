@@ -43,6 +43,7 @@ const loaders = {
       [id],
     ),
   user: (id) => db.get('SELECT id, username, email, role, created_at FROM users WHERE id = ?', [id]),
+  challenge: (id) => db.get('SELECT * FROM challenges WHERE id = ?', [id]),
 };
 
 // policies[resource][action](user, record) -> boolean
@@ -53,13 +54,20 @@ const policies = {
     update: (u, h) => owns(u, h),
     delete: (u, h) => owns(u, h) || isAdmin(u),
     // Check-ins are only ever created by the habit owner on their own habit.
-    addCheckin: (u, h) => owns(u, h),
+    // Archived habits are read-only until restored.
+    addCheckin: (u, h) => owns(u, h) && h.archived_at === null,
+    // Streak freezes are the owner's own allowance.
+    freeze: (u, h) => owns(u, h) && h.archived_at === null,
     // Check-in history is private data (F5): owner and admins only.
     listCheckins: (u, h) => owns(u, h) || isAdmin(u),
     // Comments are read on public habits (owner/admin can still read them
     // after the habit is made private), and can only be written on public habits.
     listComments: (u, h) => owns(u, h) || isAdmin(u) || h.is_public === 1,
     addComment: (u, h) => h.is_public === 1,
+    // "Add to my habits" from someone else's shared, active habit.
+    copy: (u, h) => h.is_public === 1 && h.archived_at === null && !owns(u, h),
+    // Cheering on someone else's shared, active habit.
+    react: (u, h) => h.is_public === 1 && h.archived_at === null && !owns(u, h),
   },
   checkin: {
     read: (u, c) => owns(u, c) || isAdmin(u),
@@ -76,6 +84,11 @@ const policies = {
   },
   user: {
     read: (u, target) => u.id === target.id || isAdmin(u),
+  },
+  challenge: {
+    // Any signed-in user may see, join or leave a challenge.
+    read: () => true,
+    delete: (u) => isAdmin(u),
   },
 };
 

@@ -83,6 +83,52 @@
   animation: m-hop 520ms var(--ease-spring);
 }
 
+/* ---- Dashboard moods ---- */
+
+.mascot .m-eyes-closed,
+.mascot .m-mouth-flat,
+.mascot .m-zzz {
+  opacity: 0;
+  transition: opacity 200ms ease;
+}
+
+.mascot .m-zzz {
+  font-family: var(--font-mono);
+  font-size: 26px;
+  font-weight: 500;
+  fill: var(--ink-soft);
+}
+
+.mascot.is-sleepy .m-eyes,
+.mascot.is-sleepy .m-mouth-smile {
+  opacity: 0;
+}
+
+.mascot.is-sleepy .m-eyes-closed,
+.mascot.is-sleepy .m-mouth-flat,
+.mascot.is-sleepy .m-zzz {
+  opacity: 1;
+}
+
+.mascot.is-sleepy .m-zzz {
+  animation: m-float 3s ease-in-out infinite;
+}
+
+.mascot.is-proud .m-body-group {
+  animation: m-hop 900ms var(--ease-spring) 2, m-breathe 4.8s ease-in-out 1.8s infinite;
+}
+
+/* The sprout grows with the user's best current streak (--growth 0..1). */
+.mascot .m-sprout {
+  scale: calc(1 + var(--growth, 0) * 0.7);
+}
+
+@keyframes m-float {
+  50% {
+    transform: translateY(-6px);
+  }
+}
+
 @keyframes m-breathe {
   50% {
     transform: scale(1.015, 0.985);
@@ -130,7 +176,9 @@
 @media (prefers-reduced-motion: reduce) {
   .mascot .m-body-group,
   .mascot .m-sprout,
-  .mascot .m-eyes {
+  .mascot .m-eyes,
+  .mascot .m-zzz,
+  .mascot.is-proud .m-body-group {
     animation: none !important;
   }
 }

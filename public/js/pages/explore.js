@@ -57,7 +57,10 @@ function renderChips() {
 }
 
 function resultCard(habit) {
-  const comments = habit.comment_count === 1 ? '1 comment' : `${habit.comment_count} comments`;
+  const comments = [
+    habit.comment_count === 1 ? '1 comment' : `${habit.comment_count} comments`,
+    habit.reaction_count ? `${habit.reaction_count} cheer${habit.reaction_count === 1 ? '' : 's'}` : null,
+  ].filter(Boolean).join(' · ');
   return el(
     'article',
     { class: 'card tilt habit-card' },
@@ -68,8 +71,24 @@ function resultCard(habit) {
       el('h3', {}, el('a', { text: habit.title, attrs: { href: `/habit.html?id=${habit.id}` } })),
       habit.description ? el('p', { class: 'desc', text: habit.description }) : null,
     ),
-    el('p', { class: 'byline', text: `by @${habit.owner.username}` }),
+    el('p', { class: 'byline owner-link' }, 'by ', el('a', { text: `@${habit.owner.username}`, attrs: { href: `/user.html?id=${habit.owner.id}` } })),
   );
+}
+
+// Shared habits of people you follow (public data only).
+async function loadFeed() {
+  const feed = $('#feed');
+  try {
+    const { habits } = await api.get('/api/feed');
+    feed.replaceChildren(
+      el('div', { class: 'section-head' }, el('h2', { text: 'From people you follow' }), el('span', { class: 'mono muted', text: String(habits.length) })),
+      habits.length
+        ? el('div', { class: 'grid' }, habits.slice(0, 6).map(resultCard))
+        : el('p', { class: 'muted', text: 'Follow people from their profile (tap their @name) to see what they share here.' }),
+    );
+  } catch {
+    feed.replaceChildren();
+  }
 }
 
 function pageButton(label, page, disabled) {
@@ -126,4 +145,4 @@ form.addEventListener('submit', (event) => {
   state = { ...state, q: form.q.value.trim().slice(0, 50), page: 1 };
   search();
 });
-await search();
+await Promise.all([search(), loadFeed()]);

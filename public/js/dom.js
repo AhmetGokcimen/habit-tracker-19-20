@@ -60,6 +60,13 @@ function build(node, props, children) {
   append(node, children);
 }
 
+/** Replaces a node's children; like el(), skips null / undefined / false. */
+export function fill(node, ...children) {
+  node.replaceChildren();
+  append(node, children);
+  return node;
+}
+
 export function clear(node) {
   node.replaceChildren();
   return node;

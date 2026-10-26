@@ -101,6 +101,13 @@ const limiters = {
   register: rateLimit({ name: 'register', windowMs: 60 * MINUTE, limit: 20, key: byIp }),
   // A stolen session must not become a way to brute-force the current password.
   passwordChange: rateLimit({ name: 'pw-change', windowMs: 15 * MINUTE, limit: 5, key: byUser, skipSuccessfulRequests: true }),
+  // Reads that compute over a whole history (stats, year calendars) or that
+  // could be used to walk user ids (public profiles): generous for people,
+  // a brake for scripts.
+  heavyReads: rateLimit({ name: 'heavy-reads', windowMs: 10 * MINUTE, limit: 300, key: byUser }),
+  profileReads: rateLimit({ name: 'profile-reads', windowMs: 10 * MINUTE, limit: 120, key: byUser }),
+  // Data export reads everything a user has: keep it cheap to serve.
+  exportData: rateLimit({ name: 'export', windowMs: 60 * MINUTE, limit: 10, key: byUser }),
   // Spam / abuse: all state-changing API calls per user (or per IP if anonymous).
   writes: rateLimit({ name: 'writes', windowMs: 10 * MINUTE, limit: 200, key: byUser }),
 };

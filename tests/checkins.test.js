@@ -194,3 +194,89 @@ describe('F8 — photo upload', () => {
     assert.ok(Buffer.compare(res.body, JPEG) === 0);
   });
 });
+
+describe('F7 — back-filling and undo', () => {
+  test('/mine exposes today\'s check-in id only to the owner, and undo deletes it', async () => {
+    await createUser('undoer');
+    await createUser('peeker');
+    const me = await loginAs(app, 'undoer');
+    const peeker = await loginAs(app, 'peeker');
+    const h = (await me.post('/api/habits').send({ title: 'Plank', category: 'fitness', is_public: true })).body.habit;
+    const today = new Date().toISOString().slice(0, 10);
+    const created = (await me.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: today })).body.checkin;
+
+    const mine = (await me.get('/api/habits/mine')).body.habits.find((x) => x.id === h.id);
+    assert.deepEqual(mine.latest_checkins, [{ id: created.id, checkin_date: today, amount: 1 }]);
+
+    // Another user can neither see nor delete it.
+    assert.equal('latest_checkins' in (await peeker.get(`/api/habits/${h.id}`)).body.habit, false);
+    assert.equal((await peeker.delete(`/api/checkins/${created.id}`)).status, 403);
+
+    assert.equal((await me.delete(`/api/checkins/${created.id}`)).status, 204);
+    const after = (await me.get('/api/habits/mine')).body.habits.find((x) => x.id === h.id);
+    assert.deepEqual(after.latest_checkins, []);
+  });
+});
+
+describe('F8 — measurable habits', () => {
+  const today = () => new Date().toISOString().slice(0, 10);
+  let owner;
+  let water;
+
+  before(async () => {
+    await createUser('drinker');
+    owner = await loginAs(app, 'drinker');
+    water = (await owner.post('/api/habits').send({ title: 'Water', category: 'health', target_count: 8, unit: 'glasses' })).body.habit;
+  });
+
+  test('target and unit are validated and stored', async () => {
+    assert.equal(water.target_count, 8);
+    assert.equal(water.unit, 'glasses');
+    for (const body of [{ target_count: 0 }, { target_count: 1001 }, { target_count: 2.5 }, { target_count: '8' }, { unit: 'x'.repeat(21) }]) {
+      const res = await owner.post('/api/habits').send({ title: 'T', category: 'health', ...body });
+      assert.equal(res.status, 400, JSON.stringify(body));
+    }
+  });
+
+  test('progress adds up atomically, counts as done only at the target, and 0 removes the day', async () => {
+    const step = (delta) => owner.post(`/api/habits/${water.id}/checkins/progress`).send({ checkin_date: today(), delta });
+    // Parallel +1 taps must all be counted.
+    await Promise.all(Array.from({ length: 5 }, () => step(1)));
+    let mine = (await owner.get('/api/habits/mine')).body.habits.find((h) => h.id === water.id);
+    assert.equal(mine.latest_checkins.find((c) => c.checkin_date === today()).amount, 5);
+    assert.equal(mine.recent_checkins.includes(today()), false); // 5 of 8: not done
+
+    await Promise.all(Array.from({ length: 5 }, () => step(1)));
+    mine = (await owner.get('/api/habits/mine')).body.habits.find((h) => h.id === water.id);
+    assert.equal(mine.recent_checkins.includes(today()), true);
+    assert.equal(mine.streak.current, 1);
+
+    const down = await step(-1000);
+    assert.equal(down.status, 200);
+    assert.equal(down.body.checkin, null);
+  });
+
+  test('progress is validated and owner-only', async () => {
+    await createUser('sipper');
+    const other = await loginAs(app, 'sipper');
+    for (const body of [{ checkin_date: today(), delta: 0 }, { checkin_date: today(), delta: 1001 }, { checkin_date: today(), delta: '1' }, { checkin_date: today() }, { checkin_date: today(), delta: 1, amount: 5 }]) {
+      assert.equal((await owner.post(`/api/habits/${water.id}/checkins/progress`).send(body)).status, 400, JSON.stringify(body));
+    }
+    assert.equal((await other.post(`/api/habits/${water.id}/checkins/progress`).send({ checkin_date: today(), delta: 1 })).status, 403);
+  });
+
+  test('a plain check-in on a measurable habit is a full one; raising the target keeps old days complete', async () => {
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    const full = await owner.post(`/api/habits/${water.id}/checkins`).send({ checkin_date: yesterday });
+    assert.equal(full.body.checkin.amount, 8);
+    for (const amount of [true, '1e3', ' 3', -1, 0]) {
+      const res = await owner.post(`/api/habits/${water.id}/checkins`).send({ checkin_date: '2026-01-01', amount });
+      assert.equal(res.status, 400, String(amount));
+    }
+
+    await owner.patch(`/api/habits/${water.id}`).send({ target_count: 10 });
+    const list = (await owner.get(`/api/habits/${water.id}/checkins`)).body;
+    assert.equal(list.checkins.find((c) => c.checkin_date === yesterday).amount, 10);
+    assert.ok(list.streak.current >= 1);
+  });
+});

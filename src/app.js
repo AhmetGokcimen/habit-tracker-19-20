@@ -14,6 +14,10 @@ const checkinRoutes = require('./routes/checkins');
 const commentRoutes = require('./routes/comments');
 const adminRoutes = require('./routes/admin');
 const userRoutes = require('./routes/users');
+const freezeRoutes = require('./routes/freezes');
+const socialRoutes = require('./routes/social');
+const reactionRoutes = require('./routes/reactions');
+const challengeRoutes = require('./routes/challenges');
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -62,10 +66,14 @@ function createApp() {
   api.use('/auth', authRoutes);
   api.use('/habits/:id/checkins', checkinRoutes.habitCheckins);
   api.use('/habits/:id/comments', commentRoutes.habitComments);
+  api.use('/habits/:id/freezes', freezeRoutes.habitFreezes);
+  api.use('/habits/:id/reactions', reactionRoutes.habitReactions);
   api.use('/habits', habitRoutes);
   api.use('/checkins', checkinRoutes.checkins);
   api.use('/comments', commentRoutes.comments);
+  api.use('/', socialRoutes);
   api.use('/users', userRoutes);
+  api.use('/challenges', challengeRoutes);
   api.use('/admin', adminRoutes);
   api.use(notFoundHandler);
   app.use('/api', api);

@@ -1,9 +1,10 @@
 // "Sprout" — a small coral habit buddy with a seedling on its head.
 // Built entirely from SVG primitives here (no image files, no third-party art).
 //
-// Two states only:
+// Login states:
 //   is-covering  paws over the eyes (default, password hidden)
 //   (no class)   paws lowered, eyes open and following the pointer (password shown)
+// Dashboard moods (see setMood): is-sleepy, (none), is-proud; --growth scales the sprout.
 // Visual states are CSS classes (see css/mascot.css); this module toggles them
 // and writes the pointer direction into --px / --py for the pupils.
 
@@ -44,6 +45,16 @@ function buildSvg() {
           svg('circle', { attrs: { cx: 149, cy: 132, r: 2.6, fill: '#fff' } }),
         ),
       ),
+      svg(
+        'g',
+        { class: 'm-eyes-closed' },
+        svg('path', { attrs: { d: 'M80 138 Q94 146 108 138', stroke: INK, 'stroke-width': 4.5, fill: 'none', 'stroke-linecap': 'round' } }),
+        svg('path', { attrs: { d: 'M132 138 Q146 146 160 138', stroke: INK, 'stroke-width': 4.5, fill: 'none', 'stroke-linecap': 'round' } }),
+      ),
+      svg('path', {
+        class: 'm-mouth-flat',
+        attrs: { d: 'M110 172 L130 172', stroke: INK, 'stroke-width': 4.5, fill: 'none', 'stroke-linecap': 'round' },
+      }),
       svg('path', {
         class: 'm-mouth-smile',
         attrs: { d: 'M108 168 Q120 180 132 168', stroke: INK, 'stroke-width': 4.5, fill: 'none', 'stroke-linecap': 'round' },
@@ -52,6 +63,7 @@ function buildSvg() {
       paw('m-arm m-arm-left', 52),
       paw('m-arm m-arm-right', 188),
     ),
+    svg('text', { class: 'm-zzz', attrs: { x: 186, y: 72, 'aria-hidden': 'true' }, text: 'z z' }),
   );
 }
 
@@ -69,10 +81,11 @@ function paw(className, cx) {
   );
 }
 
-export function createMascot(container) {
+export function createMascot(container, { covering = true } = {}) {
   // Start with the paws already over the eyes (class set before the SVG is
   // inserted, so there is no opening animation that would reveal the eyes).
-  container.classList.add('mascot', 'is-covering');
+  container.classList.add('mascot');
+  if (covering) container.classList.add('is-covering');
   container.replaceChildren(buildSvg());
 
   const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -87,6 +100,13 @@ export function createMascot(container) {
       void container.getBoundingClientRect(); // restart the animation
       container.classList.add(`is-${state}`);
       setTimeout(() => container.classList.remove(`is-${state}`), 700);
+    },
+    // Dashboard mood: 'sleepy' (nothing done yet), 'neutral', 'proud' (all done).
+    // growth 0..1 makes the sprout on its head bigger as streaks grow.
+    setMood(mood, growth = 0) {
+      container.classList.toggle('is-sleepy', mood === 'sleepy');
+      container.classList.toggle('is-proud', mood === 'proud');
+      container.style.setProperty('--growth', String(Math.max(0, Math.min(1, growth))));
     },
     // Points the pupils towards a screen coordinate.
     lookAt(clientX, clientY) {

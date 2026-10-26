@@ -1,10 +1,20 @@
 # Habit Tracker
 
-A small web app for building daily habits. You add the habits you want to keep, check in once a day (optionally with a proof photo and a note), and watch a "chain" of stamped days grow. Check-in history and photos are private to you; habits you choose to share appear on **Explore**, where other people can search them by text or category and leave supportive comments. Administrators can manage accounts, remove any content and review an append-only audit log of their actions.
+A small web app for building habits. You add the habits you want to keep — every day, on chosen weekdays or a number of times a week, optionally with a measurable goal such as "8 glasses" — check in (optionally with a proof photo and a note), and watch a "chain" of stamped days grow. Check-in history and photos are private to you; habits you choose to share appear on **Explore**, where other people can search them by text or category and leave supportive comments. Administrators can manage accounts, remove any content and review an append-only audit log of their actions.
 
 It was built for the course's **19/20 security challenge**: an Express 5 JSON API with server-side authentication, record-level authorization and input validation on every request, a SQLite/libSQL database (local file, Turso in production) and a plain HTML/CSS/JavaScript frontend. How it defends itself is described in [SECURITY.md](SECURITY.md).
 
 **Live:** <https://habit-tracker-19-20.vercel.app>
+
+## Features
+
+- **Flexible schedules** — daily, chosen weekdays, or N times a week; rest days never break a streak.
+- **Measurable goals** — "8 glasses", "20 pages" with a `−` / `+1` counter; a day counts when the goal is reached.
+- **Streak freezes** — two a month to cover a missed day.
+- **"Don't break the chain" calendar** — a year on one page with a big red X over every kept day, inspired by Barış Özcan's *Zinciri Kırma* wall calendar; overall on Today and per habit.
+- **Sprout, the habit buddy** — sleepy until your first check-in, proud when everything is done, and its sprout grows with your streak.
+- **Badges** for milestones, **statistics** (completion rate, by weekday and category, per habit), **reminders** while the app is open, **undo** and back-filling past days, **archive** and **drag-to-arrange**, **export** to JSON / CSV and a **dark mode**.
+- **Together** — public profiles, following and a feed, one-tap reactions, "add to my habits", and admin-run **challenges** with an opt-in leaderboard.
 
 ## Run it locally
 
@@ -35,7 +45,7 @@ Created by `npm run seed` (also run by `npm run setup`). The same accounts exist
 _Passwords are not published. They are generated randomly on every seed run and sent to the evaluator separately._
 <!-- seed-accounts:end -->
 
-The seed also creates 22 habits (public and private), 257 check-ins over the last 30 days (some with proof photos) and 15 comments.
+The seed also creates 22 habits (public and private, with a few weekly, weekday-only and measurable ones), 257 check-ins over the last 30 days (some with proof photos), 15 comments and two challenges.
 
 **Seeding resets the database.** Every run of `npm run seed` drops all tables, recreates the schema and inserts the same data again, so it can be run any number of times and always ends in the same state — but anything you created is deleted. It refuses to touch a remote (Turso) database unless you pass `npm run seed -- --remote`.
 
@@ -53,8 +63,10 @@ src/
   config.js             environment validation
   db/                   schema.sql (tables, CHECK constraints, triggers) and the libSQL client
   middleware/           authenticate, authorize (ownership policies), validate, csrf, rateLimit, upload, errorHandler
-  routes/               auth, habits, checkins, comments, users, admin
-  services/             sessions and password hashing, admin audit log
+  db/migrations.js      adds columns that older databases are missing
+  routes/               auth, habits, checkins, comments, users, admin, freezes, reactions, social, challenges
+  services/             sessions and password hashing, audit log, schedules and streaks, freezes,
+                        badges, progress (stats / chain calendar), data export
   validators/           zod request schemas
 public/                 HTML pages, CSS, browser JavaScript, self-hosted fonts
 scripts/                setup, seed, seed data, README generator, font vendoring

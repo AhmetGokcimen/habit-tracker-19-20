@@ -19,9 +19,10 @@ const zlib = require('node:zlib');
 const config = require('../src/config');
 const db = require('../src/db');
 const { hashPassword } = require('../src/services/authService');
-const { SEED_ACCOUNTS, SEED_HABITS, CHECKIN_NOTES, SEED_COMMENTS } = require('./seed-data');
+const schedule = require('../src/services/schedule');
+const { SEED_ACCOUNTS, SEED_HABITS, SEED_TARGETS, SEED_CHALLENGES, CHECKIN_NOTES, SEED_COMMENTS } = require('./seed-data');
 
-const DROP_ORDER = ['comments', 'checkins', 'habits', 'sessions', 'rate_limits', 'rate_limit_windows', 'admin_audit_log', 'users'];
+const DROP_ORDER = ['challenge_members', 'challenges', 'reactions', 'follows', 'comments', 'streak_freezes', 'checkins', 'habits', 'sessions', 'rate_limits', 'rate_limit_windows', 'admin_audit_log', 'users'];
 const PHOTO_EVERY_NTH_HABIT = 4;
 
 // 24 characters from a 58-symbol alphabet without look-alikes (~140 bits).
@@ -125,14 +126,17 @@ async function main() {
   const habitIds = new Map();
   let checkinCount = 0;
   let photoCount = 0;
-  for (const [i, [owner, title, description, category, isPublic, checkins]] of SEED_HABITS.entries()) {
+  for (const [i, [owner, title, description, category, isPublic, checkins, plan]] of SEED_HABITS.entries()) {
     const habitId = i + 1;
     const userId = userIds.get(owner);
+    const { frequency, days_mask, weekly_target } = schedule.toColumns(plan ?? { type: 'daily' });
+    const [target, unit] = SEED_TARGETS[title] ?? [1, ''];
     habitIds.set(title, habitId);
     statements.push([
-      `INSERT INTO habits (id, user_id, title, description, category, is_public, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, datetime('now', '-35 days'), datetime('now', '-35 days'))`,
-      [habitId, userId, title, description, category, isPublic ? 1 : 0],
+      `INSERT INTO habits (id, user_id, title, description, category, is_public, frequency, days_mask, weekly_target,
+                           target_count, unit, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now', '-35 days'), datetime('now', '-35 days'))`,
+      [habitId, userId, title, description, category, isPublic ? 1 : 0, frequency, days_mask, weekly_target, target, unit],
     ]);
     for (const [k, daysAgo] of checkinDays(checkins, rand).entries()) {
       const note = CHECKIN_NOTES[Math.floor(rand() * CHECKIN_NOTES.length)];
@@ -141,8 +145,8 @@ async function main() {
         : null;
       if (photo) photoCount += 1;
       statements.push([
-        'INSERT INTO checkins (habit_id, user_id, checkin_date, note, photo_data, photo_mime) VALUES (?, ?, ?, ?, ?, ?)',
-        [habitId, userId, isoDaysAgo(daysAgo), note, photo, photo ? 'image/png' : null],
+        'INSERT INTO checkins (habit_id, user_id, checkin_date, note, photo_data, photo_mime, amount) VALUES (?, ?, ?, ?, ?, ?, ?)',
+        [habitId, userId, isoDaysAgo(daysAgo), note, photo, photo ? 'image/png' : null, target],
       ]);
       checkinCount += 1;
     }
@@ -154,6 +158,21 @@ async function main() {
       "INSERT INTO comments (habit_id, user_id, body, created_at) VALUES (?, ?, ?, datetime('now', ?))",
       [habitIds.get(title), userIds.get(author), body, `-${1 + Math.floor(rand() * 20)} days`],
     ]);
+  }
+
+  // 5. Challenges with members (who consented by joining).
+  for (const [i, [title, description, category, startedAgo, length, creator, members]] of SEED_CHALLENGES.entries()) {
+    const id = i + 1;
+    statements.push([
+      'INSERT INTO challenges (id, title, description, category, start_date, end_date, created_by) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [id, title, description, category, isoDaysAgo(startedAgo), isoDaysAgo(startedAgo - length + 1), userIds.get(creator)],
+    ]);
+    for (const [member, habitTitle] of members) {
+      statements.push([
+        'INSERT INTO challenge_members (challenge_id, user_id, habit_id) VALUES (?, ?, ?)',
+        [id, userIds.get(member), habitIds.get(habitTitle)],
+      ]);
+    }
   }
 
   await db.batch(statements);

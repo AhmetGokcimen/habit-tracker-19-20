@@ -42,7 +42,25 @@ CREATE TABLE IF NOT EXISTS habits (
   category    TEXT    NOT NULL CHECK (category IN ('health', 'fitness', 'learning', 'productivity', 'mindfulness', 'social', 'other')),
   is_public   INTEGER NOT NULL DEFAULT 0 CHECK (is_public IN (0, 1)),
   created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
-  updated_at  TEXT    NOT NULL DEFAULT (datetime('now'))
+  updated_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+  -- When the habit is due (services/schedule.js):
+  --   daily     every day
+  --   weekdays  the ISO weekdays set in days_mask (bit 0 = Monday ... bit 6 = Sunday)
+  --   weekly    weekly_target times per Monday-to-Sunday week, on any days
+  -- Columns added after the first release are also listed in db/migrations.js.
+  frequency     TEXT    NOT NULL DEFAULT 'daily' CHECK (frequency IN ('daily', 'weekdays', 'weekly')),
+  days_mask     INTEGER NOT NULL DEFAULT 127 CHECK (days_mask BETWEEN 1 AND 127),
+  weekly_target INTEGER NOT NULL DEFAULT 7 CHECK (weekly_target BETWEEN 1 AND 7),
+  -- Optional local reminder time "HH:MM". Private to the owner.
+  reminder_time TEXT    CHECK (reminder_time IS NULL OR reminder_time GLOB '[0-2][0-9]:[0-5][0-9]'),
+  -- Measurable habits: a day counts as done when a check-in's amount reaches
+  -- target_count ("8 glasses"). Plain habits have target 1 and no unit.
+  target_count  INTEGER NOT NULL DEFAULT 1 CHECK (target_count BETWEEN 1 AND 1000),
+  unit          TEXT    NOT NULL DEFAULT '' CHECK (length(unit) <= 20),
+  -- Archived habits leave the dashboard and Explore but keep their history.
+  archived_at   TEXT,
+  -- Owner-defined order on the dashboard (ascending).
+  position      INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_habits_user ON habits(user_id);
 CREATE INDEX IF NOT EXISTS idx_habits_public_category ON habits(is_public, category);
@@ -60,6 +78,8 @@ CREATE TABLE IF NOT EXISTS checkins (
   photo_data     BLOB    CHECK (photo_data IS NULL OR length(photo_data) <= 1048576),
   photo_mime     TEXT    CHECK (photo_mime IS NULL OR photo_mime IN ('image/jpeg', 'image/png', 'image/webp')),
   created_at     TEXT    NOT NULL DEFAULT (datetime('now')),
+  -- Progress towards the habit's target_count on that day.
+  amount         INTEGER NOT NULL DEFAULT 1 CHECK (amount BETWEEN 1 AND 100000),
   UNIQUE (habit_id, checkin_date)
 );
 CREATE INDEX IF NOT EXISTS idx_checkins_habit ON checkins(habit_id);
@@ -81,6 +101,25 @@ BEGIN
   SELECT RAISE(ABORT, 'checkin owner and habit are immutable');
 END;
 
+-- Streak freezes (F-freeze): a missed day that keeps the streak alive.
+-- The monthly allowance is enforced atomically by the INSERT in routes/freezes.js.
+CREATE TABLE IF NOT EXISTS streak_freezes (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  habit_id    INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+  user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  freeze_date TEXT    NOT NULL CHECK (freeze_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+  UNIQUE (habit_id, freeze_date)
+);
+CREATE INDEX IF NOT EXISTS idx_freezes_user_date ON streak_freezes(user_id, freeze_date);
+
+CREATE TRIGGER IF NOT EXISTS freezes_owner_must_match
+BEFORE INSERT ON streak_freezes
+WHEN NEW.user_id IS NOT (SELECT user_id FROM habits WHERE id = NEW.habit_id)
+BEGIN
+  SELECT RAISE(ABORT, 'freeze owner must match habit owner');
+END;
+
 CREATE TABLE IF NOT EXISTS comments (
   id         INTEGER PRIMARY KEY AUTOINCREMENT,
   habit_id   INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
@@ -90,6 +129,55 @@ CREATE TABLE IF NOT EXISTS comments (
   updated_at TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_comments_habit ON comments(habit_id);
+
+-- One-tap reactions on shared habits (F12). Only counts are ever returned.
+CREATE TABLE IF NOT EXISTS reactions (
+  habit_id   INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+  user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind       TEXT    NOT NULL CHECK (kind IN ('clap', 'fire', 'muscle')),
+  created_at TEXT    NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (habit_id, user_id, kind)
+);
+
+-- Following (F11). Grants no access: the feed only shows public habits.
+CREATE TABLE IF NOT EXISTS follows (
+  follower_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  followee_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (follower_id, followee_id),
+  CHECK (follower_id <> followee_id)
+);
+CREATE INDEX IF NOT EXISTS idx_follows_followee ON follows(followee_id);
+
+-- Group challenges (F13). Created by admins only; joining shares the number
+-- of completed days of ONE of the member's own habits with other users.
+CREATE TABLE IF NOT EXISTS challenges (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  title       TEXT    NOT NULL CHECK (length(title) BETWEEN 1 AND 100),
+  description TEXT    NOT NULL DEFAULT '' CHECK (length(description) <= 1000),
+  category    TEXT    NOT NULL CHECK (category IN ('health', 'fitness', 'learning', 'productivity', 'mindfulness', 'social', 'other')),
+  start_date  TEXT    NOT NULL CHECK (start_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  end_date    TEXT    NOT NULL CHECK (end_date GLOB '[0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]'),
+  created_by  INTEGER REFERENCES users(id) ON DELETE SET NULL,
+  created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+  CHECK (end_date >= start_date)
+);
+
+CREATE TABLE IF NOT EXISTS challenge_members (
+  challenge_id INTEGER NOT NULL REFERENCES challenges(id) ON DELETE CASCADE,
+  user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  habit_id     INTEGER NOT NULL REFERENCES habits(id) ON DELETE CASCADE,
+  joined_at    TEXT    NOT NULL DEFAULT (datetime('now')),
+  PRIMARY KEY (challenge_id, user_id)
+);
+CREATE INDEX IF NOT EXISTS idx_challenge_members_habit ON challenge_members(habit_id);
+
+CREATE TRIGGER IF NOT EXISTS challenge_member_owns_habit
+BEFORE INSERT ON challenge_members
+WHEN NEW.user_id IS NOT (SELECT user_id FROM habits WHERE id = NEW.habit_id)
+BEGIN
+  SELECT RAISE(ABORT, 'challenge habit must belong to the member');
+END;
 
 -- The system can never be left without an administrator. Writes are
 -- serialized by SQLite, so this also holds when two admins act concurrently.

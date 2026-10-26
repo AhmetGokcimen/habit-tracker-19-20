@@ -87,3 +87,138 @@ describe('password change', () => {
     assert.equal(statuses.at(-1), 429);
   });
 });
+
+describe('F3 — badges', () => {
+  test('badges are computed from the caller\'s own numbers', async () => {
+    await createUser('badger');
+    const agent = await loginAs(app, 'badger');
+    let res = await agent.get('/api/users/me');
+    assert.equal(res.status, 200);
+    const first = res.body.badges.find((b) => b.id === 'first-checkin');
+    assert.equal(first.earned, false);
+    assert.deepEqual(first.progress, { value: 0, goal: 1 });
+
+    const h = (await agent.post('/api/habits').send({ title: 'Read', category: 'learning', is_public: true })).body.habit;
+    await agent.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: new Date().toISOString().slice(0, 10) });
+    res = await agent.get('/api/users/me');
+    const earned = res.body.badges.filter((b) => b.earned).map((b) => b.id).sort();
+    assert.deepEqual(earned, ['first-checkin', 'sharer']);
+  });
+
+  test('there is no endpoint to award or claim a badge', async () => {
+    await createUser('claimer');
+    const agent = await loginAs(app, 'claimer');
+    for (const path of ['/api/users/me/badges', '/api/badges']) {
+      assert.equal((await agent.post(path).send({ id: 'streak-100' })).status, 404);
+    }
+    assert.equal((await agent.patch('/api/users/me').send({ badges: ['streak-100'] })).status, 404);
+  });
+});
+
+describe('F6 — personal statistics', () => {
+  test('stats cover only the caller\'s own habits and validate the range', async () => {
+    await createUser('statsy');
+    await createUser('other');
+    const me = await loginAs(app, 'statsy');
+    const other = await loginAs(app, 'other');
+    const h = (await me.post('/api/habits').send({ title: 'Walk', category: 'fitness' })).body.habit;
+    const o = (await other.post('/api/habits').send({ title: 'Secret', category: 'health', is_public: true })).body.habit;
+    await me.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: day(0) });
+    await other.post(`/api/habits/${o.id}/checkins`).send({ checkin_date: day(0) });
+
+    const res = await me.get('/api/users/me/stats?range=30');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.daily.length, 30);
+    assert.deepEqual(res.body.habits.map((x) => x.title), ['Walk']);
+    assert.equal(res.body.habits[0].done, 1);
+    assert.deepEqual(res.body.by_category, [{ category: 'fitness', done: 1 }]);
+    assert.equal(res.body.by_weekday.length, 7);
+
+    for (const q of ['?range=7', '?range=30&range=90', '?range=1e9', '?user_id=2', '?range=30&x=1']) {
+      assert.equal((await me.get(`/api/users/me/stats${q}`)).status, 400, q);
+    }
+    assert.equal((await request(app).get('/api/users/me/stats')).status, 401);
+  });
+});
+
+describe('Don\'t break the chain — year calendars', () => {
+  test('overall chain is per day, own data only, and the year is validated', async () => {
+    await createUser('chainer');
+    const me = await loginAs(app, 'chainer');
+    const h = (await me.post('/api/habits').send({ title: 'Chain', category: 'other' })).body.habit;
+    await me.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: day(0) });
+
+    const res = await me.get('/api/users/me/chain');
+    assert.equal(res.status, 200);
+    const todayEntry = res.body.days.find((d) => d.date === day(0));
+    assert.deepEqual({ due: todayEntry.due, done: todayEntry.done }, { due: 1, done: 1 });
+
+    for (const q of ['?year=1999', '?year=3000', '?year=abc', '?year=2024&year=2025', '?habit=1']) {
+      assert.equal((await me.get(`/api/users/me/chain${q}`)).status, 400, q);
+    }
+    assert.deepEqual((await me.get('/api/users/me/chain?year=2001')).body.days.every((d) => d.done === 0), true);
+  });
+
+  test('a habit\'s year is private like its check-ins', async () => {
+    await createUser('chainowner');
+    await createUser('chainpeek');
+    const owner = await loginAs(app, 'chainowner');
+    const peek = await loginAs(app, 'chainpeek');
+    const h = (await owner.post('/api/habits').send({ title: 'Open chain', category: 'other', is_public: true })).body.habit;
+    await owner.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: day(0) });
+
+    const res = await owner.get(`/api/habits/${h.id}/checkins/year`);
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.done, [day(0)]);
+    assert.equal((await peek.get(`/api/habits/${h.id}/checkins/year`)).status, 403);
+  });
+});
+
+describe('F10 — data export', () => {
+  test('exports only the caller\'s data, as a download, with CSV injection neutralised', async () => {
+    await createUser('exporter');
+    await createUser('stranger');
+    const me = await loginAs(app, 'exporter');
+    const stranger = await loginAs(app, 'stranger');
+    const h = (await me.post('/api/habits').send({ title: '=HYPERLINK("http://evil.test","x")', category: 'other' })).body.habit;
+    await me.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: day(0), note: '@SUM(1+1) "quoted"' });
+    const s = (await stranger.post('/api/habits').send({ title: 'Stranger secret', category: 'other' })).body.habit;
+    await stranger.post(`/api/habits/${s.id}/checkins`).send({ checkin_date: day(0), note: 'not yours' });
+
+    const json = await me.get('/api/users/me/export');
+    assert.equal(json.status, 200);
+    assert.match(json.headers['content-disposition'], /^attachment; filename="habit-tracker-exporter-\d{4}-\d{2}-\d{2}\.json"$/);
+    assert.equal(json.headers['x-content-type-options'], 'nosniff');
+    const data = JSON.parse(json.text);
+    assert.equal(data.account.username, 'exporter');
+    assert.equal(data.habits.length, 1);
+    assert.equal(data.checkins.length, 1);
+    assert.ok(!json.text.includes('Stranger secret') && !json.text.includes('not yours'));
+    assert.ok(!('password_hash' in data.account));
+
+    const csv = await me.get('/api/users/me/export?format=csv');
+    assert.match(csv.headers['content-type'], /^text\/csv/);
+    assert.ok(csv.text.includes(`"'=HYPERLINK(""http://evil.test"",""x"")"`));
+    assert.ok(csv.text.includes(`"'@SUM(1+1) ""quoted"""`));
+    assert.ok(!csv.text.includes('not yours'));
+
+    assert.equal((await me.get('/api/users/me/export?format=xml')).status, 400);
+    assert.equal((await me.get('/api/users/me/export?user_id=2')).status, 400);
+    assert.equal((await request(app).get('/api/users/me/export')).status, 401);
+  });
+
+  test('csvCell neutralises every formula trigger', () => {
+    const { csvCell } = require('../src/services/exportData');
+    for (const bad of ['=1+1', '+1', '-1', '@x', '\t=1', '\r=1']) assert.ok(csvCell(bad).startsWith(`"'`), JSON.stringify(bad));
+    assert.equal(csvCell('plain'), '"plain"');
+    assert.equal(csvCell(null), '""');
+  });
+
+  test('export is rate limited per user', async () => {
+    await createUser('hoarder');
+    const me = await loginAs(app, 'hoarder');
+    const codes = [];
+    for (let i = 0; i < 12; i++) codes.push((await me.get('/api/users/me/export')).status);
+    assert.equal(codes.filter((c) => c === 429).length >= 1, true);
+  });
+});

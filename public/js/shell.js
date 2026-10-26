@@ -22,9 +22,52 @@ export function brandMark() {
 
 const NAV = [
   { href: '/', label: 'Today', key: 'today' },
+  { href: '/stats.html', label: 'Stats', key: 'stats' },
+  { href: '/challenges.html', label: 'Challenges', key: 'challenges' },
   { href: '/explore.html', label: 'Explore', key: 'explore' },
   { href: '/profile.html', label: 'Profile', key: 'profile' },
 ];
+
+// ---- theme (system / light / dark), applied early by js/theme.js ----------
+
+const THEMES = [
+  ['system', '◐', 'Theme: follows your system'],
+  ['light', '☀', 'Theme: light'],
+  ['dark', '☾', 'Theme: dark'],
+];
+
+function currentTheme() {
+  try {
+    const t = localStorage.getItem('theme');
+    return t === 'light' || t === 'dark' ? t : 'system';
+  } catch {
+    return 'system';
+  }
+}
+
+function themeToggle() {
+  const button = el('button', { class: 'btn btn-ghost btn-sm theme-toggle', attrs: { type: 'button' } });
+  const sync = () => {
+    const [, icon, label] = THEMES.find(([key]) => key === currentTheme());
+    button.textContent = icon;
+    button.setAttribute('aria-label', `${label}. Click to change.`);
+    button.title = label;
+  };
+  button.addEventListener('click', () => {
+    const next = THEMES[(THEMES.findIndex(([key]) => key === currentTheme()) + 1) % THEMES.length][0];
+    try {
+      if (next === 'system') localStorage.removeItem('theme');
+      else localStorage.setItem('theme', next);
+    } catch {
+      // storage blocked: the change lasts for this page only
+    }
+    if (next === 'system') document.documentElement.removeAttribute('data-theme');
+    else document.documentElement.setAttribute('data-theme', next);
+    sync();
+  });
+  sync();
+  return button;
+}
 
 function renderTopbar(user, active) {
   const header = $('#topbar');
@@ -56,6 +99,7 @@ function renderTopbar(user, active) {
       el(
         'div',
         { class: 'account' },
+        themeToggle(),
         el('a', { class: 'who', text: `@${user.username}`, attrs: { href: '/profile.html' } }),
         logout,
       ),
@@ -79,6 +123,8 @@ export async function initPage({ active } = {}) {
   renderTopbar(user, active);
   ensureToastRegion();
   enableTilt();
+  // Loaded lazily: reminders.js imports this module.
+  import('./reminders.js').then((m) => m.startReminders()).catch(() => {});
   return user;
 }
 
@@ -93,14 +139,25 @@ function ensureToastRegion() {
   return region;
 }
 
-export function toast(message, { error = false } = {}) {
-  const item = el('div', { class: `toast${error ? ' is-error' : ''}`, text: message });
-  ensureToastRegion().append(item);
-  setTimeout(() => {
+/** action: optional { label, onClick } shown as a button (e.g. "Undo"). */
+export function toast(message, { error = false, action = null } = {}) {
+  const item = el('div', { class: `toast${error ? ' is-error' : ''}` }, el('span', { text: message }));
+  const leave = () => {
     item.classList.add('is-leaving');
     item.addEventListener('animationend', () => item.remove(), { once: true });
     setTimeout(() => item.remove(), 400);
-  }, 3200);
+  };
+  if (action) {
+    const button = el('button', { class: 'toast-action', text: action.label, attrs: { type: 'button' } });
+    button.addEventListener('click', () => {
+      button.disabled = true;
+      leave();
+      action.onClick();
+    });
+    item.append(button);
+  }
+  ensureToastRegion().append(item);
+  setTimeout(leave, action ? 6000 : 3200);
 }
 
 export function errorMessage(err) {

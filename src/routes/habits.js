@@ -11,24 +11,39 @@ const { validate } = require('../middleware/validate');
 const { requireAuth } = require('../middleware/authenticate');
 const { authorize } = require('../middleware/authorize');
 const { moderationAudit } = require('../services/auditLog');
+const { badRequest, conflict } = require('../utils/httpError');
+const schedule = require('../services/schedule');
+const { freezesByHabit, freezesLeft } = require('../services/freezes');
 
 const router = express.Router();
 router.use(requireAuth);
 
 const PAGE_SIZE = 20;
+// Per-user cap (active + archived) so creating or copying cannot be used to
+// flood the database. Checked inside the INSERT, so parallel requests cannot
+// exceed it.
+const MAX_HABITS = 100;
+const tooManyHabits = () => conflict(`You can keep at most ${MAX_HABITS} habits — delete or reuse an old one`);
 
 // Explicit allow-list of fields sent to clients (never emails or hashes).
-function serializeHabit(row) {
+// The reminder time reveals a daily routine, so only the owner gets it.
+function serializeHabit(row, viewer = null) {
   return {
     id: row.id,
     title: row.title,
     description: row.description,
     category: row.category,
     is_public: row.is_public === 1,
+    schedule: schedule.fromRow(row),
+    target_count: row.target_count,
+    unit: row.unit,
     owner: { id: row.user_id, username: row.owner_username },
     created_at: row.created_at,
     updated_at: row.updated_at,
+    archived: row.archived_at !== null && row.archived_at !== undefined,
+    ...(viewer && viewer.id === row.user_id && { reminder_time: row.reminder_time ?? null }),
     ...(row.comment_count !== undefined && { comment_count: row.comment_count }),
+    ...(row.reaction_count !== undefined && { reaction_count: row.reaction_count }),
     ...(row.checkin_count !== undefined && { checkin_count: row.checkin_count }),
     ...(row.last_checkin !== undefined && { last_checkin: row.last_checkin }),
     ...(row.recent_dates !== undefined && { recent_checkins: row.recent_dates ? row.recent_dates.split(',').sort() : [] }),
@@ -45,9 +60,10 @@ router.get('/', validate({ query: schemas.habitSearch }), async (req, res) => {
 
   const rows = await db.all(
     `SELECT h.*, u.username AS owner_username,
-            (SELECT COUNT(*) FROM comments c WHERE c.habit_id = h.id) AS comment_count
+            (SELECT COUNT(*) FROM comments c WHERE c.habit_id = h.id) AS comment_count,
+            (SELECT COUNT(*) FROM reactions r WHERE r.habit_id = h.id) AS reaction_count
        FROM habits h JOIN users u ON u.id = h.user_id
-      WHERE h.is_public = 1
+      WHERE h.is_public = 1 AND h.archived_at IS NULL
         AND (?1 IS NULL OR h.category = ?1)
         AND (?2 IS NULL OR h.title LIKE ?2 ESCAPE '\\' OR h.description LIKE ?2 ESCAPE '\\')
       ORDER BY h.created_at DESC, h.id DESC
@@ -62,56 +78,169 @@ router.get('/', validate({ query: schemas.habitSearch }), async (req, res) => {
   });
 });
 
-// The caller's own habits (public and private), with private check-in stats.
-router.get('/mine', async (req, res) => {
-  const rows = await db.all(
-    `SELECT h.*, u.username AS owner_username,
-            (SELECT COUNT(*) FROM checkins c WHERE c.habit_id = h.id) AS checkin_count,
-            (SELECT MAX(checkin_date) FROM checkins c WHERE c.habit_id = h.id) AS last_checkin,
-            (SELECT group_concat(checkin_date) FROM checkins c
-              WHERE c.habit_id = h.id AND c.checkin_date >= date('now', '-40 days')) AS recent_dates
-       FROM habits h JOIN users u ON u.id = h.user_id
-      WHERE h.user_id = ?
-      ORDER BY h.created_at DESC, h.id DESC`,
-    [req.user.id],
-  );
-  res.json({ habits: rows.map(serializeHabit) });
+// The caller's own habits (public and private), with private check-in stats
+// and streaks computed from the full history.
+router.get('/mine', validate({ query: schemas.mineQuery }), async (req, res) => {
+  const archived = req.valid.query.archived === '1';
+  const [rows, dates, freezes, left] = await Promise.all([
+    db.all(
+      `SELECT h.*, u.username AS owner_username,
+              (SELECT COUNT(*) FROM checkins c WHERE c.habit_id = h.id) AS checkin_count,
+              (SELECT MAX(checkin_date) FROM checkins c WHERE c.habit_id = h.id) AS last_checkin,
+              (SELECT group_concat(checkin_date) FROM checkins c
+                WHERE c.habit_id = h.id AND c.checkin_date >= date('now', '-40 days')
+                  AND c.amount >= h.target_count) AS recent_dates,
+              (SELECT group_concat(id || ':' || checkin_date || ':' || amount) FROM checkins c
+                WHERE c.habit_id = h.id AND c.checkin_date >= date('now', '-2 days')) AS latest_entries
+         FROM habits h JOIN users u ON u.id = h.user_id
+        WHERE h.user_id = ? AND (h.archived_at IS NOT NULL) = ?
+        ORDER BY h.position, h.created_at DESC, h.id DESC`,
+      [req.user.id, archived ? 1 : 0],
+    ),
+    db.all(
+      `SELECT c.habit_id, c.checkin_date FROM checkins c JOIN habits h ON h.id = c.habit_id
+        WHERE c.user_id = ? AND c.amount >= h.target_count`,
+      [req.user.id],
+    ),
+    freezesByHabit(req.user.id),
+    freezesLeft(req.user.id),
+  ]);
+
+  const byHabit = groupDates(dates);
+  const thisWeek = schedule.weekIndex(schedule.todayNumber());
+  const recentStart = schedule.isoDate(schedule.todayNumber() - 40);
+  res.json({
+    freezes_left: left,
+    habits: rows.map((row) => {
+      const done = byHabit.get(row.id) ?? [];
+      const frozen = freezes.get(row.id) ?? [];
+      return {
+        ...serializeHabit(row, req.user),
+        streak: schedule.streaks(row, done, frozen),
+        recent_freezes: frozen.filter((d) => d >= recentStart).sort(),
+        // Ids of the last few check-ins, so the dashboard can undo today's.
+        latest_checkins: (row.latest_entries ? row.latest_entries.split(',') : []).map((e) => {
+          const [id, date, amount] = e.split(':');
+          return { id: Number(id), checkin_date: date, amount: Number(amount) };
+        }),
+        week_count: done.filter((d) => schedule.weekIndex(schedule.dayNumber(d)) === thisWeek).length,
+      };
+    }),
+  });
 });
 
-router.post('/', validate({ body: schemas.habitCreate }), async (req, res) => {
-  const { title, description, category, is_public } = req.valid.body;
-  // Owner is always the authenticated user, never a value from the request.
-  const { lastInsertRowid } = await db.run(
-    'INSERT INTO habits (user_id, title, description, category, is_public) VALUES (?, ?, ?, ?, ?)',
-    [req.user.id, title, description, category, is_public ? 1 : 0],
+// Inserts a habit for userId at the top of their list, unless they already
+// have MAX_HABITS. Column values come from validated input or a stored row.
+async function insertHabit(userId, v) {
+  const { changes, lastInsertRowid } = await db.run(
+    `INSERT INTO habits (user_id, title, description, category, is_public, frequency, days_mask, weekly_target,
+                         reminder_time, target_count, unit, position)
+     SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11,
+            (SELECT COALESCE(MIN(position), 1) - 1 FROM habits WHERE user_id = ?1)
+      WHERE (SELECT COUNT(*) FROM habits WHERE user_id = ?1) < ?12`,
+    [userId, v.title, v.description, v.category, v.is_public, v.frequency, v.days_mask, v.weekly_target,
+      v.reminder_time, v.target_count, v.unit, MAX_HABITS],
   );
+  if (changes === 0) throw tooManyHabits();
+  return lastInsertRowid;
+}
+
+function groupDates(rows) {
+  const map = new Map();
+  for (const { habit_id, checkin_date } of rows) {
+    if (!map.has(habit_id)) map.set(habit_id, []);
+    map.get(habit_id).push(checkin_date);
+  }
+  return map;
+}
+
+router.post('/', validate({ body: schemas.habitCreate }), async (req, res) => {
+  const { title, description, category, is_public, reminder_time, target_count, unit } = req.valid.body;
+  const { frequency, days_mask, weekly_target } = schedule.toColumns(req.valid.body.schedule);
+  // Owner is always the authenticated user, never a value from the request.
+  const lastInsertRowid = await insertHabit(req.user.id, {
+    title, description, category, is_public: is_public ? 1 : 0, frequency, days_mask, weekly_target, reminder_time, target_count, unit,
+  });
   const row = await db.get(
     'SELECT h.*, u.username AS owner_username FROM habits h JOIN users u ON u.id = h.user_id WHERE h.id = ?',
     [lastInsertRowid],
   );
-  res.status(201).json({ habit: serializeHabit(row) });
+  res.status(201).json({ habit: serializeHabit(row, req.user) });
+});
+
+// Reorder: the body must list exactly the caller's active habits. Every
+// UPDATE is also scoped to user_id, so foreign ids can never be touched.
+router.put('/order', validate({ body: schemas.habitOrder }), async (req, res) => {
+  const { ids } = req.valid.body;
+  const own = await db.all('SELECT id FROM habits WHERE user_id = ? AND archived_at IS NULL', [req.user.id]);
+  const ownIds = new Set(own.map((r) => r.id));
+  if (ids.length !== ownIds.size || !ids.every((id) => ownIds.has(id))) {
+    throw badRequest('Send the complete list of your active habits');
+  }
+  await db.batch(ids.map((id, i) => ['UPDATE habits SET position = ? WHERE id = ? AND user_id = ?', [i, id, req.user.id]]));
+  res.status(204).end();
+});
+
+// "Add to my habits": a private copy of someone else's shared habit (its
+// settings only — never check-ins, comments or the reminder time).
+router.post('/:id/copy', authorize('habit', 'copy'), async (req, res) => {
+  const h = req.resource;
+  const id = await insertHabit(req.user.id, {
+    title: h.title,
+    description: h.description,
+    category: h.category,
+    is_public: 0,
+    frequency: h.frequency,
+    days_mask: h.days_mask,
+    weekly_target: h.weekly_target,
+    reminder_time: null,
+    target_count: h.target_count,
+    unit: h.unit,
+  });
+  const row = await db.get(
+    'SELECT h.*, u.username AS owner_username FROM habits h JOIN users u ON u.id = h.user_id WHERE h.id = ?',
+    [id],
+  );
+  res.status(201).json({ habit: serializeHabit(row, req.user) });
 });
 
 router.get('/:id', authorize('habit', 'read'), async (req, res) => {
   const owner = await db.get('SELECT username FROM users WHERE id = ?', [req.resource.user_id]);
-  res.json({ habit: serializeHabit({ ...req.resource, owner_username: owner.username }) });
+  res.json({ habit: serializeHabit({ ...req.resource, owner_username: owner.username }, req.user) });
 });
 
 router.patch('/:id', authorize('habit', 'update'), validate({ body: schemas.habitUpdate }), async (req, res) => {
-  const updates = { ...req.valid.body };
+  const { schedule: newSchedule, archived, ...updates } = req.valid.body;
   if ('is_public' in updates) updates.is_public = updates.is_public ? 1 : 0;
+  if (archived !== undefined) {
+    // Keep the original archive date when archiving twice.
+    updates.archived_at = archived ? req.resource.archived_at ?? new Date().toISOString().slice(0, 10) : null;
+  }
+  if (newSchedule) Object.assign(updates, schedule.toColumns(newSchedule));
 
-  // Column names come from the strict schema's fixed key set, never from raw input.
+  // Column names come from the strict schema's fixed key set (and toColumns),
+  // never from raw input.
   const columns = Object.keys(updates);
-  await db.run(
-    `UPDATE habits SET ${columns.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`,
-    [...columns.map((c) => updates[c]), req.resource.id],
-  );
+  const statements = [
+    [
+      `UPDATE habits SET ${columns.map((c) => `${c} = ?`).join(', ')}, updated_at = datetime('now') WHERE id = ?`,
+      [...columns.map((c) => updates[c]), req.resource.id],
+    ],
+  ];
+  // Raising a target must not turn days that were complete into partial ones.
+  const oldTarget = req.resource.target_count;
+  if (updates.target_count && updates.target_count !== oldTarget) {
+    statements.push([
+      'UPDATE checkins SET amount = MAX(amount, ?) WHERE habit_id = ? AND amount >= ?',
+      [updates.target_count, req.resource.id, oldTarget],
+    ]);
+  }
+  await db.batch(statements);
   const row = await db.get(
     'SELECT h.*, u.username AS owner_username FROM habits h JOIN users u ON u.id = h.user_id WHERE h.id = ?',
     [req.resource.id],
   );
-  res.json({ habit: serializeHabit(row) });
+  res.json({ habit: serializeHabit(row, req.user) });
 });
 
 router.delete('/:id', authorize('habit', 'delete'), async (req, res) => {
@@ -120,6 +249,9 @@ router.delete('/:id', authorize('habit', 'delete'), async (req, res) => {
   await db.batch([
     ...moderationAudit(req.user, user_id, 'habit.delete', 'habit', id, { owner_id: user_id, title }),
     ['DELETE FROM comments WHERE habit_id = ?', [id]],
+    ['DELETE FROM streak_freezes WHERE habit_id = ?', [id]],
+    ['DELETE FROM reactions WHERE habit_id = ?', [id]],
+    ['DELETE FROM challenge_members WHERE habit_id = ?', [id]],
     ['DELETE FROM checkins WHERE habit_id = ?', [id]],
     ['DELETE FROM habits WHERE id = ?', [id]],
   ]);

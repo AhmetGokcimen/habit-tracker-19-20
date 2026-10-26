@@ -14,9 +14,12 @@ const { requireAuth } = require('../middleware/authenticate');
 const { authorize } = require('../middleware/authorize');
 const { photoUpload, EXTENSIONS } = require('../middleware/upload');
 const { moderationAudit } = require('../services/auditLog');
+const schedule = require('../services/schedule');
+const { freezesLeft } = require('../services/freezes');
 const { conflict, notFound } = require('../utils/httpError');
+const { limiters } = require('../middleware/rateLimit');
 
-const SELECT_CHECKIN = `SELECT id, habit_id, user_id, checkin_date, note, created_at,
+const SELECT_CHECKIN = `SELECT id, habit_id, user_id, checkin_date, note, created_at, amount,
                                photo_data IS NOT NULL AS has_photo
                           FROM checkins`;
 
@@ -26,6 +29,7 @@ function serializeCheckin(row) {
     habit_id: row.habit_id,
     checkin_date: row.checkin_date,
     note: row.note,
+    amount: row.amount,
     has_photo: row.has_photo === 1,
     photo_url: row.has_photo === 1 ? `/api/checkins/${row.id}/photo` : null,
     created_at: row.created_at,
@@ -49,12 +53,22 @@ async function uniqueDay(promise) {
 const habitCheckins = express.Router({ mergeParams: true });
 habitCheckins.use(requireAuth);
 
+// The streak is derived from private check-ins, so it is only returned here
+// (owner and admins), never on the public habit record.
 habitCheckins.get('/', authorize('habit', 'listCheckins'), async (req, res) => {
-  const rows = await db.all(
-    `${SELECT_CHECKIN} WHERE habit_id = ? ORDER BY checkin_date DESC LIMIT 400`,
-    [req.resource.id],
-  );
-  res.json({ checkins: rows.map(serializeCheckin) });
+  const [rows, dates, freezes, left] = await Promise.all([
+    db.all(`${SELECT_CHECKIN} WHERE habit_id = ? ORDER BY checkin_date DESC LIMIT 400`, [req.resource.id]),
+    db.all('SELECT checkin_date FROM checkins WHERE habit_id = ? AND amount >= ?', [req.resource.id, req.resource.target_count]),
+    db.all('SELECT freeze_date FROM streak_freezes WHERE habit_id = ? ORDER BY freeze_date', [req.resource.id]),
+    freezesLeft(req.resource.user_id),
+  ]);
+  const frozen = freezes.map((f) => f.freeze_date);
+  res.json({
+    checkins: rows.map(serializeCheckin),
+    freezes: frozen,
+    freezes_left: left,
+    streak: schedule.streaks(req.resource, dates.map((d) => d.checkin_date), frozen),
+  });
 });
 
 // Accepts JSON, or multipart/form-data when a photo is attached.
@@ -67,16 +81,61 @@ habitCheckins.post(
   validate({ body: schemas.checkinCreate }),
   async (req, res) => {
     const { checkin_date, note } = req.valid.body;
+    const amount = req.valid.body.amount ?? req.resource.target_count;
     const { lastInsertRowid } = await uniqueDay(
       db.run(
-        `INSERT INTO checkins (habit_id, user_id, checkin_date, note, photo_data, photo_mime)
-         VALUES (?, ?, ?, ?, ?, ?)`,
-        [req.resource.id, req.user.id, checkin_date, note, req.photo?.data ?? null, req.photo?.mime ?? null],
+        `INSERT INTO checkins (habit_id, user_id, checkin_date, note, photo_data, photo_mime, amount)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [req.resource.id, req.user.id, checkin_date, note, req.photo?.data ?? null, req.photo?.mime ?? null, amount],
       ),
     );
     res.status(201).json({ checkin: serializeCheckin(await findCheckin(lastInsertRowid)) });
   },
 );
+
+// Measurable habits: add or remove some amount for a day in ONE atomic step,
+// so quick taps or parallel requests never lose an update. Reaching 0 removes
+// the day's check-in.
+habitCheckins.post(
+  '/progress',
+  authorize('habit', 'addCheckin'),
+  validate({ body: schemas.checkinProgress }),
+  async (req, res) => {
+    const { checkin_date, delta } = req.valid.body;
+    const habitId = req.resource.id;
+    if (delta > 0) {
+      await db.run(
+        `INSERT INTO checkins (habit_id, user_id, checkin_date, amount) VALUES (?1, ?2, ?3, MIN(?4, 100000))
+         ON CONFLICT (habit_id, checkin_date) DO UPDATE SET amount = MIN(checkins.amount + ?4, 100000)`,
+        [habitId, req.user.id, checkin_date, delta],
+      );
+    } else {
+      await db.batch([
+        ['DELETE FROM checkins WHERE habit_id = ? AND checkin_date = ? AND amount + ? < 1', [habitId, checkin_date, delta]],
+        ['UPDATE checkins SET amount = amount + ? WHERE habit_id = ? AND checkin_date = ?', [delta, habitId, checkin_date]],
+      ]);
+    }
+    const row = await db.get(`${SELECT_CHECKIN} WHERE habit_id = ? AND checkin_date = ?`, [habitId, checkin_date]);
+    res.json({ checkin: row ? serializeCheckin(row) : null, target_count: req.resource.target_count });
+  },
+);
+
+// One year of this habit for the chain calendar (owner/admin, like the history).
+habitCheckins.get('/year', limiters.heavyReads, authorize('habit', 'listCheckins'), validate({ query: schemas.chainQuery }), async (req, res) => {
+  const year = req.valid.query.year ?? new Date().getUTCFullYear();
+  const range = [req.resource.id, `${year}-01-01`, `${year}-12-31`];
+  const [entries, frozen] = await Promise.all([
+    db.all('SELECT checkin_date, amount FROM checkins WHERE habit_id = ? AND checkin_date BETWEEN ? AND ? ORDER BY checkin_date', range),
+    db.all('SELECT freeze_date FROM streak_freezes WHERE habit_id = ? AND freeze_date BETWEEN ? AND ? ORDER BY freeze_date', range),
+  ]);
+  const target = req.resource.target_count;
+  res.json({
+    year,
+    done: entries.filter((r) => r.amount >= target).map((r) => r.checkin_date),
+    partial: entries.filter((r) => r.amount < target).map((r) => r.checkin_date),
+    frozen: frozen.map((r) => r.freeze_date),
+  });
+});
 
 // ---- /api/checkins/:id ---------------------------------------------------
 

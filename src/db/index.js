@@ -11,6 +11,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { createClient } = require('@libsql/client');
 const config = require('../config');
+const { migrate } = require('./migrations');
 
 let client;
 let ready;
@@ -24,12 +25,15 @@ function getClient() {
   return client;
 }
 
-// Applies schema.sql once per process (every statement is IF NOT EXISTS).
+// Applies schema.sql once per process (every statement is IF NOT EXISTS),
+// then adds any columns an older database is missing (see migrations.js).
 function init() {
   if (!ready) {
     const schema = fs.readFileSync(path.join(__dirname, 'schema.sql'), 'utf8');
-    ready = getClient()
+    const c = getClient();
+    ready = c
       .executeMultiple(`PRAGMA foreign_keys = ON;\n${schema}`)
+      .then(() => migrate(c))
       .catch((err) => {
         ready = undefined;
         throw err;

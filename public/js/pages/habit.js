@@ -4,10 +4,10 @@
 // every action anyway.
 
 import { api, ApiError } from '../api.js';
-import { el, $, idFromQuery, localISODate, addDays, formatDate, formatTimestamp } from '../dom.js';
+import { el, $, fill, idFromQuery, localISODate, addDays, formatDate, formatTimestamp } from '../dom.js';
 import { initPage, toast, errorMessage, confirmDialog, showFormErrors, clearFormErrors, withBusy } from '../shell.js';
 import { reveal } from '../motion.js';
-import { categoryChip, visibilityLabel, currentStreak, streakBadge, habitDialog } from '../components.js';
+import { categoryChip, visibilityLabel, streakBadge, habitDialog, isDue, scheduleLabel, chainCalendar, reactionBar } from '../components.js';
 
 const MAX_PHOTO_BYTES = 1024 * 1024;
 const PHOTO_TYPES = ['image/jpeg', 'image/png', 'image/webp'];
@@ -17,7 +17,13 @@ const habitId = idFromQuery();
 let user;
 let habit;
 let checkins = [];
+let streak = null;
+let freezes = [];
+let freezesLeft = 0;
+let chainYear = Number(localISODate().slice(0, 4));
+let year = { done: [], partial: [], frozen: [] };
 let comments = [];
+let reactions = null;
 
 const isOwner = () => habit.owner.id === user.id;
 const isAdmin = () => user.role === 'admin';
@@ -55,7 +61,33 @@ function ownerTools() {
         }
       }),
     );
-    tools.push(edit, share);
+    const archive = el('button', { class: 'btn btn-sm', text: habit.archived ? 'Restore' : 'Archive', attrs: { type: 'button' } });
+    archive.addEventListener('click', () =>
+      withBusy(archive, async () => {
+        try {
+          ({ habit } = await api.patch(`/api/habits/${habit.id}`, { archived: !habit.archived }));
+          toast(habit.archived ? 'Archived — it keeps its history and can be restored any time' : 'Restored');
+          await refresh();
+        } catch (err) {
+          toast(errorMessage(err), { error: true });
+        }
+      }),
+    );
+    tools.push(edit, share, archive);
+  }
+  if (!isOwner() && habit.is_public && !habit.archived) {
+    const copy = el('button', { class: 'btn btn-sm btn-accent', text: '+ Add to my habits', attrs: { type: 'button' } });
+    copy.addEventListener('click', () =>
+      withBusy(copy, async () => {
+        try {
+          const { habit: mine } = await api.post(`/api/habits/${habit.id}/copy`);
+          toast(`Added “${mine.title}” to your habits (private)`, { action: { label: 'Open', onClick: () => location.assign(`/habit.html?id=${Number(mine.id)}`) } });
+        } catch (err) {
+          toast(errorMessage(err), { error: true });
+        }
+      }),
+    );
+    tools.push(copy);
   }
   if (isOwner() || isAdmin()) {
     const del = el('button', { class: 'btn btn-sm btn-danger', text: isOwner() ? 'Delete' : 'Remove habit', attrs: { type: 'button' } });
@@ -87,8 +119,16 @@ function header() {
       {},
       el('p', { class: 'eyebrow' }, categoryChip(habit.category), ' ', visibilityLabel(habit.is_public)),
       el('h1', { class: 'detail-title section', text: habit.title }),
-      el('p', { class: 'byline', text: `by @${habit.owner.username} · since ${formatDate(habit.created_at)}` }),
+      habit.archived ? el('p', { class: 'archived-note', text: 'Archived · read-only until restored' }) : null,
+      el(
+        'p',
+        { class: 'byline' },
+        'by ',
+        habit.is_public ? el('a', { text: `@${habit.owner.username}`, attrs: { href: `/user.html?id=${habit.owner.id}` } }) : `@${habit.owner.username}`,
+        ` · ${scheduleLabel(habit.schedule)}${habit.target_count > 1 ? ` · ${habit.target_count} ${habit.unit} a day` : ''} · since ${formatDate(habit.created_at)}`,
+      ),
       habit.description ? el('p', { class: 'description', text: habit.description }) : null,
+      reactions ? reactionBar(habit.id, reactions, habit.is_public && !habit.archived && !isOwner()) : null,
     ),
     ownerTools(),
   );
@@ -97,7 +137,8 @@ function header() {
 // ---- check-ins (private) ------------------------------------------------------
 
 function heatmap() {
-  const done = new Set(checkins.map((c) => c.checkin_date));
+  const done = new Set(checkins.filter((c) => c.amount >= habit.target_count).map((c) => c.checkin_date));
+  const frozen = new Set(freezes);
   const today = localISODate();
   const start = addDays(today, -83);
   const lead = (new Date(`${start}T12:00:00`).getDay() + 6) % 7; // Monday-first rows
@@ -105,15 +146,115 @@ function heatmap() {
   for (let i = 0; i < lead; i++) cells.push(el('span', { class: 'day is-future' }));
   for (let i = 0; i < 84; i++) {
     const date = addDays(start, i);
-    cells.push(el('span', { class: `day${done.has(date) ? ' is-done' : ''}`, attrs: { title: date } }));
+    const off = !done.has(date) && !isDue(habit, date);
+    const ice = !done.has(date) && frozen.has(date);
+    const state = done.has(date) ? ' is-done' : ice ? ' is-frozen' : off ? ' is-off' : '';
+    const title = `${formatDate(date)}${done.has(date) ? ' — checked in' : ice ? ' — frozen' : ''}`;
+    if (isOwner() && !habit.archived && date <= today) {
+      // The owner can fill in or clear any past day straight from the calendar.
+      const cell = el('button', {
+        class: `day day-btn${state}`,
+        attrs: { type: 'button', title, 'aria-label': `${title}. ${done.has(date) ? 'Remove check-in' : 'Check in for this day'}` },
+      });
+      cell.addEventListener('click', () => toggleDay(date));
+      cells.push(cell);
+    } else {
+      cells.push(el('span', { class: `day${state}`, attrs: { title } }));
+    }
   }
-  return el('div', { class: 'heatmap', attrs: { role: 'img', 'aria-label': `${checkins.length} check-ins recorded` } }, cells);
+  return el('div', { class: 'heatmap', attrs: { role: isOwner() ? 'group' : 'img', 'aria-label': `${checkins.length} check-ins recorded` } }, cells);
+}
+
+async function toggleDay(date) {
+  const existing = checkins.find((c) => c.checkin_date === date);
+  try {
+    if (existing) {
+      const ok = await confirmDialog({
+        title: 'Remove this check-in?',
+        message: `The check-in for ${formatDate(date)}${existing.note || existing.has_photo ? ', with its note and photo,' : ''} will be removed.`,
+        confirmLabel: 'Remove check-in',
+      });
+      if (!ok) return;
+      await api.del(`/api/checkins/${existing.id}`);
+      toast(`Removed ${formatDate(date)}`);
+    } else {
+      await api.post(`/api/habits/${habit.id}/checkins`, { checkin_date: date });
+      toast(`Checked in for ${formatDate(date)}`);
+    }
+    await refresh();
+  } catch (err) {
+    toast(errorMessage(err), { error: true });
+  }
+}
+
+// Missed due days in the last 7 days that a freeze could cover.
+function freezableDays() {
+  const done = new Set(checkins.map((c) => c.checkin_date));
+  const frozen = new Set(freezes);
+  const today = localISODate();
+  const days = [];
+  for (let i = 1; i <= 7; i++) {
+    const d = addDays(today, -i);
+    if (d >= habit.created_at.slice(0, 10) && isDue(habit, d) && !done.has(d) && !frozen.has(d)) days.push(d);
+  }
+  return days;
+}
+
+function freezePanel() {
+  const days = freezableDays();
+  const button = el('button', { class: 'btn btn-ghost btn-sm freeze-btn', text: '❄ Freeze a missed day', attrs: { type: 'button' } });
+  button.disabled = freezesLeft === 0 || days.length === 0;
+  button.addEventListener('click', async () => {
+    const day = await pickFreezeDay(days);
+    if (!day) return;
+    try {
+      await api.post(`/api/habits/${habit.id}/freezes`, { freeze_date: day });
+      toast(`${formatDate(day)} is frozen — your streak is safe`);
+      await refresh();
+    } catch (err) {
+      toast(errorMessage(err), { error: true });
+    }
+  });
+  const text = freezesLeft === 0
+    ? 'No streak freezes left this month.'
+    : `${freezesLeft} streak freeze${freezesLeft === 1 ? '' : 's'} left this month.`;
+  return el('div', { class: 'freeze-panel' }, el('p', { class: 'mono muted', text }), button);
+}
+
+function pickFreezeDay(days) {
+  return new Promise((resolve) => {
+    const dialog = el('dialog', { class: 'dialog', attrs: { 'aria-labelledby': 'fz-title' } });
+    const finish = (value) => {
+      dialog.close();
+      dialog.remove();
+      resolve(value);
+    };
+    const choices = days.map((d) => {
+      const b = el('button', { class: 'btn', text: formatDate(d), attrs: { type: 'button' } });
+      b.addEventListener('click', () => finish(d));
+      return b;
+    });
+    const cancel = el('button', { class: 'btn btn-ghost', text: 'Cancel', attrs: { type: 'button' } });
+    cancel.addEventListener('click', () => finish(null));
+    dialog.addEventListener('cancel', () => finish(null));
+    dialog.append(
+      el('h2', { text: 'Freeze a missed day', attrs: { id: 'fz-title' } }),
+      el('p', { class: 'muted', text: 'A frozen day keeps your streak alive. You get 2 per month; this can’t be undone.' }),
+      el('div', { class: 'freeze-choices' }, choices),
+      el('div', { class: 'dialog-actions' }, cancel),
+    );
+    document.body.append(dialog);
+    dialog.showModal();
+  });
 }
 
 function checkinForm() {
   const today = localISODate();
   const date = el('input', { class: 'input', attrs: { id: 'ci-date', name: 'checkin_date', type: 'date', required: true, max: today, min: '2000-01-01' } });
   date.value = today;
+  const measured = habit.target_count > 1;
+  const amount = el('input', { class: 'input input-num', attrs: { id: 'ci-amount', name: 'amount', type: 'number', min: 1, max: 100000, step: 1, required: true } });
+  amount.value = String(habit.target_count);
   const note = el('textarea', { class: 'textarea', attrs: { id: 'ci-note', name: 'note', maxlength: 500, placeholder: 'How did it go? (optional)' } });
   const photo = el('input', { attrs: { id: 'ci-photo', name: 'photo', type: 'file', accept: PHOTO_TYPES.join(',') } });
   const submit = el('button', { class: 'btn btn-accent', text: 'Check in', attrs: { type: 'submit' } });
@@ -123,6 +264,9 @@ function checkinForm() {
     { class: 'form card', attrs: { novalidate: true } },
     el('h3', { text: 'Add a check-in' }),
     el('div', { class: 'field', dataset: { field: 'checkin_date' } }, el('label', { text: 'Day', attrs: { for: 'ci-date' } }), date),
+    measured
+      ? el('div', { class: 'field', dataset: { field: 'amount' } }, el('label', { text: `How many ${habit.unit || 'times'}? (goal ${habit.target_count})`, attrs: { for: 'ci-amount' } }), amount)
+      : null,
     el('div', { class: 'field', dataset: { field: 'note' } }, el('label', { text: 'Note', attrs: { for: 'ci-note' } }), note),
     el(
       'div',
@@ -146,6 +290,7 @@ function checkinForm() {
     const data = new FormData();
     data.append('checkin_date', date.value);
     data.append('note', note.value.trim());
+    if (measured) data.append('amount', amount.value);
     if (file) data.append('photo', file);
 
     await withBusy(submit, async () => {
@@ -191,7 +336,12 @@ function checkinItem(c) {
   return el(
     'li',
     { class: 'log-item' },
-    el('span', { class: 'date', text: formatDate(c.checkin_date) }),
+    el(
+      'span',
+      { class: 'date' },
+      formatDate(c.checkin_date),
+      habit.target_count > 1 ? el('span', { class: `amount${c.amount >= habit.target_count ? ' is-met' : ''}`, text: `${c.amount} / ${habit.target_count} ${habit.unit}` }) : null,
+    ),
     el(
       'div',
       {},
@@ -212,11 +362,12 @@ function checkinSection() {
       'div',
       { class: 'section-head' },
       el('h2', { text: 'Check-ins', attrs: { id: 'checkins-heading' } }),
-      streakBadge(currentStreak(checkins.map((c) => c.checkin_date))),
+      streakBadge(streak),
     ),
-    el('p', { class: 'mono muted', text: 'Last 12 weeks · private to you and admins' }),
+    el('p', { class: 'mono muted', text: isOwner() ? 'Last 12 weeks · tap a day to fill it in or clear it · private to you and admins' : 'Last 12 weeks · private to you and admins' }),
     el('div', { class: 'section' }, heatmap()),
-    isOwner() ? el('div', { class: 'section' }, checkinForm()) : null,
+    isOwner() && !habit.archived ? freezePanel() : null,
+    isOwner() && !habit.archived ? el('div', { class: 'section' }, checkinForm()) : null,
     el(
       'div',
       { class: 'section' },
@@ -335,23 +486,68 @@ function commentSection() {
 
 async function loadComments() {
   if (habit.is_public || isOwner() || isAdmin()) {
-    ({ comments } = await api.get(`/api/habits/${habit.id}/comments`));
+    [{ comments }, reactions] = await Promise.all([
+      api.get(`/api/habits/${habit.id}/comments`),
+      api.get(`/api/habits/${habit.id}/reactions`),
+    ]);
   } else {
     comments = [];
+    reactions = null;
   }
   render();
 }
 
 async function refresh() {
   ({ habit } = await api.get(`/api/habits/${habitId}`));
-  if (isOwner() || isAdmin()) ({ checkins } = await api.get(`/api/habits/${habit.id}/checkins`));
+  if (isOwner() || isAdmin()) {
+    [{ checkins, streak, freezes, freezes_left: freezesLeft }] = await Promise.all([api.get(`/api/habits/${habit.id}/checkins`), loadYear()]);
+  }
   await loadComments();
+}
+
+function habitWall() {
+  const today = localISODate();
+  const created = habit.created_at.slice(0, 10);
+  const done = new Set(year.done);
+  const partial = new Set(year.partial);
+  const frozen = new Set(year.frozen);
+  const states = new Map();
+  for (let d = `${chainYear}-01-01`; d <= `${chainYear}-12-31` && d <= today; d = addDays(d, 1)) {
+    if (done.has(d)) states.set(d, 'done');
+    else if (d < created) continue;
+    else if (frozen.has(d)) states.set(d, 'frozen');
+    else if (partial.has(d)) states.set(d, 'partial');
+    else if (habit.schedule.type === 'weekly' || d === today) continue;
+    else if (!isDue(habit, d)) states.set(d, 'rest');
+    else states.set(d, 'missed');
+  }
+  return chainCalendar({
+    year: chainYear,
+    states,
+    minYear: Math.min(Number(created.slice(0, 4)), ...year.done.map((d) => Number(d.slice(0, 4)))),
+    onYear: async (y) => {
+      chainYear = y;
+      await loadYear();
+      render();
+      $('#chain')?.scrollIntoView({ block: 'nearest' });
+    },
+  });
+}
+
+async function loadYear() {
+  ({ done: year.done, partial: year.partial, frozen: year.frozen } = await api.get(`/api/habits/${habit.id}/checkins/year?year=${chainYear}`));
 }
 
 function render() {
   document.title = `${habit.title} · Habit Tracker`;
-  const left = isOwner() || isAdmin() ? checkinSection() : el('section', {}, el('div', { class: 'empty' }, el('h2', { text: 'Check-ins are private' }), el('p', { class: 'muted', text: `Only @${habit.owner.username} can see their check-in history.` })));
-  main.replaceChildren(header(), el('div', { class: 'detail' }, left, commentSection()));
+  const canSee = isOwner() || isAdmin();
+  const left = canSee ? checkinSection() : el('section', {}, el('div', { class: 'empty' }, el('h2', { text: 'Check-ins are private' }), el('p', { class: 'muted', text: `Only @${habit.owner.username} can see their check-in history.` })));
+  fill(
+    main,
+    header(),
+    canSee ? el('section', { class: 'section', attrs: { id: 'chain' } }, habitWall()) : null,
+    el('div', { class: 'detail section' }, left, commentSection()),
+  );
 }
 
 user = await initPage();

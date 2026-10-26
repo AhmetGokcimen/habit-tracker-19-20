@@ -151,3 +151,123 @@ describe('F7 — search and filter', () => {
     assert.equal((await alice.get('/api/habits?sort=password')).status, 400);
   });
 });
+
+describe('F4 — reminder times', () => {
+  test('reminder time is validated and stored', async () => {
+    const res = await alice.post('/api/habits').send({ title: 'Vitamins', category: 'health', reminder_time: '08:30' });
+    assert.equal(res.status, 201);
+    assert.equal(res.body.habit.reminder_time, '08:30');
+    for (const bad of ['8:30', '24:00', '12:60', '08:30:00', '08:30 ', 'noon', 830]) {
+      const r = await alice.post('/api/habits').send({ title: 'X', category: 'health', reminder_time: bad });
+      assert.equal(r.status, 400, String(bad));
+    }
+    const cleared = await alice.patch(`/api/habits/${res.body.habit.id}`).send({ reminder_time: null });
+    assert.equal(cleared.body.habit.reminder_time, null);
+  });
+
+  test('reminder time is private: other users and search results never see it', async () => {
+    const h = (await alice.post('/api/habits').send({ title: 'Daily sketch', category: 'other', is_public: true, reminder_time: '21:15' })).body.habit;
+    const asBob = await bob.get(`/api/habits/${h.id}`);
+    assert.equal('reminder_time' in asBob.body.habit, false);
+    const search = await bob.get('/api/habits?q=Daily%20sketch');
+    assert.ok(search.body.habits.length >= 1);
+    assert.ok(search.body.habits.every((x) => !('reminder_time' in x)));
+    const asAdmin = await admin.get(`/api/habits/${h.id}`);
+    assert.equal('reminder_time' in asAdmin.body.habit, false);
+    assert.equal((await alice.get(`/api/habits/${h.id}`)).body.habit.reminder_time, '21:15');
+  });
+});
+
+describe('F9 — archive and order', () => {
+  test('archived habits leave /mine and Explore, keep their data, and take no new check-ins', async () => {
+    const h = (await alice.post('/api/habits').send({ title: 'Archive me please', category: 'other', is_public: true })).body.habit;
+    const today = new Date().toISOString().slice(0, 10);
+    await alice.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: '2026-01-05' });
+
+    const res = await alice.patch(`/api/habits/${h.id}`).send({ archived: true });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.habit.archived, true);
+
+    assert.ok(!(await alice.get('/api/habits/mine')).body.habits.some((x) => x.id === h.id));
+    assert.ok((await alice.get('/api/habits/mine?archived=1')).body.habits.some((x) => x.id === h.id));
+    assert.equal((await bob.get('/api/habits?q=Archive%20me')).body.habits.length, 0);
+    assert.equal((await alice.post(`/api/habits/${h.id}/checkins`).send({ checkin_date: today })).status, 403);
+    assert.equal((await alice.get(`/api/habits/${h.id}/checkins`)).body.checkins.length, 1);
+
+    // Only the owner can archive; restoring brings it back.
+    assert.equal((await bob.patch(`/api/habits/${h.id}`).send({ archived: false })).status, 403);
+    assert.equal((await alice.patch(`/api/habits/${h.id}`).send({ archived: false })).body.habit.archived, false);
+    assert.equal((await alice.get('/api/habits/mine?archived=yes')).status, 400);
+  });
+
+  test('order takes exactly the caller\'s active habits and nothing else', async () => {
+    await createUser('sorter');
+    const sorter = await loginAs(app, 'sorter');
+    const ids = [];
+    for (const t of ['A', 'B', 'C']) ids.push((await sorter.post('/api/habits').send({ title: t, category: 'other' })).body.habit.id);
+    // Newest first by default.
+    assert.deepEqual((await sorter.get('/api/habits/mine')).body.habits.map((h) => h.title), ['C', 'B', 'A']);
+
+    assert.equal((await sorter.put('/api/habits/order').send({ ids })).status, 204);
+    assert.deepEqual((await sorter.get('/api/habits/mine')).body.habits.map((h) => h.title), ['A', 'B', 'C']);
+
+    const foreign = alicePublic.id;
+    const bad = [
+      { ids: [ids[0], ids[1]] },
+      { ids: [...ids, foreign] },
+      { ids: [ids[0], ids[1], foreign] },
+      { ids: [ids[0], ids[0], ids[1]] },
+      { ids: [] },
+      { ids: ['1', '2', '3'] },
+      { ids, user_id: 1 },
+    ];
+    for (const body of bad) {
+      assert.equal((await sorter.put('/api/habits/order').send(body)).status, 400, JSON.stringify(body));
+    }
+    // Alice's habit was never moved.
+    assert.equal((await db.get('SELECT position FROM habits WHERE id = ?', [foreign])).position <= 0, true);
+  });
+});
+
+describe('F14 — copy a shared habit', () => {
+  test('copies settings only, as a private habit of the caller', async () => {
+    const src = (await alice.post('/api/habits').send({
+      title: 'Water', category: 'health', is_public: true, target_count: 8, unit: 'glasses',
+      schedule: { type: 'weekdays', days: [1, 2, 3] }, reminder_time: '07:00',
+    })).body.habit;
+    await alice.post(`/api/habits/${src.id}/checkins`).send({ checkin_date: new Date().toISOString().slice(0, 10), note: 'alice only' });
+    await bob.post(`/api/habits/${src.id}/comments`).send({ body: 'nice' });
+
+    const res = await bob.post(`/api/habits/${src.id}/copy`);
+    assert.equal(res.status, 201);
+    const copy = res.body.habit;
+    assert.equal(copy.owner.username, 'bob');
+    assert.equal(copy.is_public, false);
+    assert.deepEqual([copy.title, copy.target_count, copy.unit], ['Water', 8, 'glasses']);
+    assert.deepEqual(copy.schedule, { type: 'weekdays', days: [1, 2, 3] });
+    assert.equal(copy.reminder_time, null);
+    assert.equal((await bob.get(`/api/habits/${copy.id}/checkins`)).body.checkins.length, 0);
+    assert.equal((await bob.get(`/api/habits/${copy.id}/comments`)).body.comments.length, 0);
+  });
+
+  test('private, own and archived habits cannot be copied', async () => {
+    assert.equal((await bob.post(`/api/habits/${alicePrivate.id}/copy`)).status, 403);
+    assert.equal((await alice.post(`/api/habits/${alicePublic.id}/copy`)).status, 403);
+    const arch = (await alice.post('/api/habits').send({ title: 'Old', category: 'other', is_public: true })).body.habit;
+    await alice.patch(`/api/habits/${arch.id}`).send({ archived: true });
+    assert.equal((await bob.post(`/api/habits/${arch.id}/copy`)).status, 403);
+    assert.equal((await bob.raw.post(`/api/habits/${alicePublic.id}/copy`)).status, 403); // CSRF header
+  });
+
+  test('a user can keep at most 100 habits, even with parallel requests', async () => {
+    await createUser('hoarder2');
+    const h = await loginAs(app, 'hoarder2');
+    const uid = (await db.get("SELECT id FROM users WHERE username = 'hoarder2'")).id;
+    await db.batch(Array.from({ length: 95 }, (_, i) => ['INSERT INTO habits (user_id, title, category) VALUES (?, ?, ?)', [uid, `H${i}`, 'other']]));
+    const results = await Promise.all(Array.from({ length: 10 }, () => h.post('/api/habits').send({ title: 'More', category: 'other' })));
+    assert.equal(results.filter((r) => r.status === 201).length, 5);
+    assert.ok(results.filter((r) => r.status !== 201).every((r) => r.status === 409));
+    assert.equal((await h.post(`/api/habits/${alicePublic.id}/copy`)).status, 409);
+    assert.equal((await db.get('SELECT COUNT(*) AS n FROM habits WHERE user_id = ?', [uid])).n, 100);
+  });
+});

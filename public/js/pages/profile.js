@@ -6,6 +6,8 @@ import { api, ApiError } from '../api.js';
 import { el, $, formatDate } from '../dom.js';
 import { initPage, toast, showFormErrors, clearFormErrors, withBusy } from '../shell.js';
 import { reveal } from '../motion.js';
+import { badgeTile, announceNewBadges } from '../components.js';
+import { notificationPermission, requestNotifications } from '../reminders.js';
 
 const main = $('#main');
 
@@ -31,6 +33,59 @@ function details(user) {
     row('Username', `@${user.username}`, 'Shown on habits you share.'),
     row('Email', user.email, 'Private — only you and administrators can see it.'),
     row('Member since', formatDate(user.created_at)),
+  );
+}
+
+function remindersCard() {
+  const status = el('p', { class: 'mono muted' });
+  const button = el('button', { class: 'btn', text: 'Allow notifications', attrs: { type: 'button' } });
+  const sync = () => {
+    const p = notificationPermission();
+    status.textContent = {
+      granted: 'Notifications are on for this browser.',
+      denied: 'Notifications are blocked in your browser settings — reminders show inside the page instead.',
+      default: 'Reminders show inside the page. Allow notifications to get them as system alerts.',
+      unsupported: 'This browser has no notifications — reminders show inside the page.',
+    }[p];
+    button.hidden = p !== 'default';
+  };
+  button.addEventListener('click', async () => {
+    await requestNotifications();
+    sync();
+  });
+  sync();
+  return el(
+    'div',
+    { class: 'card account-details' },
+    el('p', { text: 'Set a reminder time on any habit (Edit → “Remind me at”). You get one nudge a day while Habit Tracker is open, only if the habit is still due.' }),
+    status,
+    button,
+  );
+}
+
+async function followingCard() {
+  const { following } = await api.get('/api/users/me/following');
+  return el(
+    'div',
+    { class: 'card account-details' },
+    following.length
+      ? el('ul', { class: 'following-list' }, following.map((u) => el('li', {}, el('a', { text: `@${u.username}`, attrs: { href: `/user.html?id=${u.id}` } }))))
+      : el('p', { class: 'muted', text: 'You don’t follow anyone yet. Tap an @name on Explore to see their profile.' }),
+    el('p', { class: 'hint', text: 'Only you can see this list. Others only see how many followers they have.' }),
+  );
+}
+
+function exportCard() {
+  return el(
+    'div',
+    { class: 'card account-details' },
+    el('p', { text: 'Download everything you created: habits, check-ins, freezes and comments. Photos are not included.' }),
+    el(
+      'div',
+      { class: 'export-links' },
+      el('a', { class: 'btn', text: 'Download JSON', attrs: { href: '/api/users/me/export?format=json', download: true } }),
+      el('a', { class: 'btn', text: 'Check-ins as CSV', attrs: { href: '/api/users/me/export?format=csv', download: true } }),
+    ),
   );
 }
 
@@ -83,7 +138,9 @@ function passwordForm() {
 }
 
 await initPage({ active: 'profile' });
-const { user, stats } = await api.get('/api/users/me');
+const { user, stats, badges } = await api.get('/api/users/me');
+announceNewBadges(user.id, badges);
+const earnedCount = badges.filter((b) => b.earned).length;
 
 main.replaceChildren(
   el(
@@ -93,9 +150,15 @@ main.replaceChildren(
   ),
   ledger(stats),
   el(
+    'section',
+    { class: 'section', attrs: { 'aria-labelledby': 'badges-heading' } },
+    el('div', { class: 'section-head' }, el('h2', { text: 'Badges', attrs: { id: 'badges-heading' } }), el('span', { class: 'mono muted', text: `${earnedCount} of ${badges.length}` })),
+    el('ul', { class: 'badges' }, badges.map(badgeTile)),
+  ),
+  el(
     'div',
     { class: 'profile-grid section' },
-    el('section', {}, el('div', { class: 'section-head' }, el('h2', { text: 'Account' })), details(user)),
+    el('section', {}, el('div', { class: 'section-head' }, el('h2', { text: 'Account' })), details(user), el('div', { class: 'section-head section' }, el('h2', { text: 'Reminders' })), remindersCard(), el('div', { class: 'section-head section' }, el('h2', { text: 'Following' })), await followingCard(), el('div', { class: 'section-head section' }, el('h2', { text: 'Your data' })), exportCard()),
     el('section', {}, el('div', { class: 'section-head' }, el('h2', { text: 'Security' })), passwordForm()),
   ),
 );
