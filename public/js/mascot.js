@@ -128,15 +128,24 @@ export function createMascot(container, { covering = true } = {}) {
  *  - password shown                -> paws lowered, eyes open
  */
 export function bindPasswordMascot(mascot, passwordInput, toggleButton) {
-  const sync = () => mascot.set('covering', passwordInput.type !== 'text');
+const sync = () => {
+  const isPasswordFocused = document.activeElement === passwordInput;
+  const isPasswordHidden = passwordInput.type === 'password';
 
+  mascot.set('covering', isPasswordFocused && isPasswordHidden);
+};
+
+passwordInput.addEventListener('focus', sync);
+passwordInput.addEventListener('blur', sync);
   toggleButton.addEventListener('click', () => {
     const show = passwordInput.type === 'password';
     passwordInput.type = show ? 'text' : 'password';
     toggleButton.textContent = show ? 'Hide' : 'Show';
     toggleButton.setAttribute('aria-pressed', String(show));
     toggleButton.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
-    sync();
+
+passwordInput.focus({ preventScroll: true });
+sync();
   });
   sync();
 
