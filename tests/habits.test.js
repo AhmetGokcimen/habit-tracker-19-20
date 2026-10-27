@@ -149,6 +149,112 @@ describe('F7 — search and filter', () => {
     assert.equal((await alice.get('/api/habits?q=a&q=b')).status, 400);
     assert.equal((await alice.get('/api/habits?page=-1')).status, 400);
     assert.equal((await alice.get('/api/habits?sort=password')).status, 400);
+  });  
+  test('filters public habits by frequency', async () => {
+    // Daily habits should appear in daily search results.
+    const daily = await alice.get('/api/habits?q=Drink&frequency=daily');
+
+    assert.equal(daily.status, 200);
+    assert.deepEqual(
+      daily.body.habits.map((h) => h.title),
+      ['Drink water']
+    );
+
+    // Daily habits should not appear in weekly search results.
+    const weekly = await alice.get('/api/habits?q=Drink&frequency=weekly');
+
+    assert.equal(weekly.status, 200);
+    assert.deepEqual(weekly.body.habits, []);
+
+    // Invalid frequency values must be rejected.
+    const invalid = await alice.get('/api/habits?frequency=invalid');
+
+    assert.equal(invalid.status, 400);
+  }); 
+  test('filters public habits by goal type', async () => {
+    // Create a measurable habit.
+    const created = await bob.post('/api/habits').send({
+      title: 'Eight glasses of water',
+      category: 'health',
+      is_public: true,
+      target_count: 8,
+      unit: 'glasses',
+    });
+
+    assert.equal(created.status, 201);
+
+    // Measurable habits should appear in measurable results.
+    const measurable = await alice.get('/api/habits?q=Eight%20glasses%20of%20water&goal_type=measurable');
+
+    assert.equal(measurable.status, 200);
+    assert.deepEqual(
+      measurable.body.habits.map((h) => h.title),
+      ['Eight glasses of water']
+    );
+
+    // Measurable habits must not appear as simple check-ins.
+    const notSimple = await alice.get('/api/habits?q=Eight%20glasses%20of%20water&goal_type=simple');
+
+    assert.equal(notSimple.status, 200);
+    assert.deepEqual(notSimple.body.habits, []);
+
+    // Simple habits should appear in simple results.
+    const simple = await alice.get('/api/habits?q=Drink%20water&goal_type=simple');
+
+    assert.equal(simple.status, 200);
+    assert.deepEqual(
+      simple.body.habits.map((h) => h.title),
+      ['Drink water']
+    );
+
+    // Invalid goal types must be rejected.
+    const invalid = await alice.get('/api/habits?goal_type=invalid');
+
+    assert.equal(invalid.status, 400);
+  });  
+  test('sorts public habits by date and engagement', async () => {
+    const sortOptions = [
+      'newest',
+      'oldest',
+      'popular',
+      'discussed',
+    ];
+
+    for (const sort of sortOptions) {
+      const response = await alice.get(`/api/habits?sort=${sort}`);
+
+      assert.equal(response.status, 200);
+
+      const habits = response.body.habits;
+      assert.ok(habits.length >= 2);
+
+      const compareNewest = (a, b) =>
+        b.created_at.localeCompare(a.created_at) || b.id - a.id;
+
+      const compareOldest = (a, b) =>
+        a.created_at.localeCompare(b.created_at) || a.id - b.id;
+
+      const comparePopular = (a, b) =>
+        b.reaction_count - a.reaction_count || compareNewest(a, b);
+
+      const compareDiscussed = (a, b) =>
+        b.comment_count - a.comment_count || compareNewest(a, b);
+
+      const comparators = {
+        newest: compareNewest,
+        oldest: compareOldest,
+        popular: comparePopular,
+        discussed: compareDiscussed,
+      };
+
+      const expected = [...habits].sort(comparators[sort]);
+
+      assert.deepEqual(
+        habits.map((h) => h.id),
+        expected.map((h) => h.id),
+        `Incorrect sorting for ${sort}`
+      );
+    }
   });
 });
 

@@ -17,10 +17,16 @@ const chips = $('#categories');
 function readState() {
   const params = new URLSearchParams(location.search);
   const category = params.get('category');
+  const frequency = params.get('frequency');
+  const goalType = params.get('goal_type');
+  const sort = params.get('sort');
   const page = Number(params.get('page'));
   return {
     q: (params.get('q') ?? '').slice(0, 50),
     category: CATEGORIES.includes(category) ? category : '',
+    frequency: ['daily', 'weekdays', 'weekly'].includes(frequency) ? frequency : '',
+    goal_type: ['simple', 'measurable'].includes(goalType) ? goalType : '',
+    sort: ['newest', 'oldest', 'popular', 'discussed'].includes(sort) ? sort : 'newest',
     page: Number.isInteger(page) && page > 0 && page <= 1000 ? page : 1,
   };
 }
@@ -31,6 +37,9 @@ function syncUrl() {
   const params = new URLSearchParams();
   if (state.q) params.set('q', state.q);
   if (state.category) params.set('category', state.category);
+  if (state.frequency) params.set('frequency', state.frequency);
+  if (state.goal_type) params.set('goal_type', state.goal_type);
+  if (state.sort !== 'newest') params.set('sort', state.sort);
   if (state.page > 1) params.set('page', String(state.page));
   const query = params.toString();
   history.replaceState(null, '', query ? `?${query}` : location.pathname);
@@ -107,6 +116,9 @@ async function search() {
   const params = new URLSearchParams({ page: String(state.page) });
   if (state.q) params.set('q', state.q);
   if (state.category) params.set('category', state.category);
+  if (state.frequency) params.set('frequency', state.frequency);
+  if (state.goal_type) params.set('goal_type', state.goal_type);
+  if (state.sort !== 'newest') params.set('sort', state.sort);
 
   results.replaceChildren(el('span', { class: 'loading', attrs: { 'aria-label': 'Loading' } }));
   try {
@@ -139,10 +151,76 @@ async function search() {
 
 await initPage({ active: 'explore' });
 form.q.value = state.q;
+
+const goalTypeSelect = $('#goal-type');
+goalTypeSelect.value = state.goal_type;
+
+// Automatically filter habits when the goal type changes.
+goalTypeSelect.addEventListener('change', () => {
+  state = {
+    ...state,
+    q: form.q.value.trim().slice(0, 50),
+    goal_type: goalTypeSelect.value,
+    page: 1,
+  };
+  search();
+});
+
+const frequencySelect = $('#frequency');
+frequencySelect.value = state.frequency;
+
+// Automatically filter habits when frequency changes.
+frequencySelect.addEventListener('change', () => {
+  state = {
+    ...state,
+    q: form.q.value.trim().slice(0, 50),
+    frequency: frequencySelect.value,
+    page: 1,
+  };
+  search();
+});
+
+const sortSelect = $('#sort');
+sortSelect.value = state.sort;
+
+// Automatically update results when the sorting option changes.
+sortSelect.addEventListener('change', () => {
+  state = {
+    ...state,
+    q: form.q.value.trim().slice(0, 50),
+    sort: sortSelect.value,
+    page: 1,
+  };
+  search();
+});
+
 renderChips();
 form.addEventListener('submit', (event) => {
   event.preventDefault();
   state = { ...state, q: form.q.value.trim().slice(0, 50), page: 1 };
   search();
 });
+
+const resetButton = $('#reset-filters');
+
+// Reset all search filters to their default values.
+resetButton.addEventListener('click', () => {
+  state = {
+    q: '',
+    category: '',
+    frequency: '',
+    goal_type: '',
+    sort: 'newest',
+    page: 1,
+  };
+
+  form.q.value = '';
+  frequencySelect.value = '';
+  goalTypeSelect.value = '';
+  sortSelect.value = 'newest';
+
+  renderChips();
+  search();
+});
+
 await Promise.all([search(), loadFeed()]);

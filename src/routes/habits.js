@@ -55,8 +55,17 @@ const escapeLike = (text) => text.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 
 // F7: search public habits by text and/or category. Fully parameterized.
 router.get('/', validate({ query: schemas.habitSearch }), async (req, res) => {
-  const { q, category, page } = req.valid.query;
+  const { q, category, frequency, goal_type, page, sort } = req.valid.query;
   const pattern = q ? `%${escapeLike(q)}%` : null;
+  // Define safe sorting options for public habit search.
+  const sortOptions = {
+  newest: 'h.created_at DESC, h.id DESC',
+  oldest: 'h.created_at ASC, h.id ASC',
+  popular: 'reaction_count DESC, h.created_at DESC, h.id DESC',
+  discussed: 'comment_count DESC, h.created_at DESC, h.id DESC',
+};
+
+  const orderBy = sortOptions[sort];
 
   const rows = await db.all(
     `SELECT h.*, u.username AS owner_username,
@@ -66,9 +75,13 @@ router.get('/', validate({ query: schemas.habitSearch }), async (req, res) => {
       WHERE h.is_public = 1 AND h.archived_at IS NULL
         AND (?1 IS NULL OR h.category = ?1)
         AND (?2 IS NULL OR h.title LIKE ?2 ESCAPE '\\' OR h.description LIKE ?2 ESCAPE '\\')
-      ORDER BY h.created_at DESC, h.id DESC
-      LIMIT ?3 OFFSET ?4`,
-    [category ?? null, pattern, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE],
+        AND (?3 IS NULL OR h.frequency = ?3)        
+        AND (?4 IS NULL OR (?4 = 'simple' AND h.target_count = 1 AND COALESCE(h.unit, '') = '') OR (?4 = 'measurable' AND (h.target_count > 1 OR COALESCE(h.unit, '') <> '')))
+
+      ORDER BY ${orderBy}
+      LIMIT ?5 OFFSET ?6`,
+    [
+  category ?? null, pattern, frequency ?? null, goal_type ?? null, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE,],
   );
 
   res.json({
