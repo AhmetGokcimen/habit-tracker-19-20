@@ -2729,6 +2729,64 @@ button.reaction:hover {
   line-height: 1.6;
 }
 
+/* Subscription: responsive pricing cards */
+@media (max-width: 760px) {
+
+  /* Stack subscription cards vertically */
+  .subscription-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  /* Give each card enough space */
+  .subscription-card {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 22px;
+    gap: 14px;
+  }
+
+  /* Keep pricing readable */
+  .subscription-card h3 {
+    font-size: 2.4rem;
+    margin-top: 8px;
+  }
+
+  .subscription-card h3 small {
+    font-size: 0.85rem;
+  }
+
+  /* Improve feature list spacing */
+  .subscription-card ul {
+    gap: 12px;
+  }
+
+  /* Full-width plan status */
+  .subscription-card > p:last-child {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: auto;
+  }
+}
+/* Subscription: mobile comparison scroll hint */
+.comparison-scroll-hint {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .comparison-scroll-hint {
+    display: block;
+    margin: 0 0 12px;
+    font-size: 0.85rem;
+    opacity: 0.75;
+  }
+
+  .comparison-table-wrapper {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+}
 
 
 

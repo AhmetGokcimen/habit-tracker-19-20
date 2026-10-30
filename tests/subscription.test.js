@@ -219,3 +219,45 @@ test('subscription comparison table displays correct plan features', () => {
   );
 });
 
+test('subscription comparison supports mobile scrolling and accessible headings', () => {
+  const css = fs.readFileSync(
+    path.join(__dirname, '..', 'public', 'css', 'app.css'),
+    'utf8'
+  );
+
+  // Mobile users should receive a horizontal scrolling hint.
+  assert.match(
+    subscriptionHtml,
+    /Swipe horizontally to compare all plans/
+  );
+
+  // The comparison table must have an accessible caption.
+  assert.match(
+    subscriptionHtml,
+    /<caption class="visually-hidden">/
+  );
+
+  // Column and row headings must be identified.
+  assert.match(
+    subscriptionHtml,
+    /<th scope="col">Features<\/th>/
+  );
+
+  assert.match(
+    subscriptionHtml,
+    /<th scope="row">Basic habit tracking<\/th>/
+  );
+
+  // The table container must support horizontal scrolling.
+  assert.match(
+    css,
+    /\.comparison-table-wrapper\s*\{[^}]*overflow-x:\s*auto;/
+  );
+
+  // The mobile layout must show the scroll hint.
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*760px\)\s*\{[\s\S]*?\.comparison-scroll-hint\s*\{[^}]*display:\s*block;/
+  );
+});
+
