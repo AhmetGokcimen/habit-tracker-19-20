@@ -2361,7 +2361,7 @@ button.reaction:hover {
 }
 
 #search-form .search-filter .input {
-  width: 100%;
+  width: 104%;
   min-width: 0;
   font-size: var(--step-0);
 }
@@ -2436,4 +2436,59 @@ button.reaction:hover {
   outline: 2px solid var(--ink);
   outline-offset: 3px;
 }
+
+
+/* Explore: mobile search and filter refinements */
+@media (max-width: 600px) {
+  #search-form.search-bar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-2);
+  }
+
+  /* Full-width search input and button */
+  #search-form .search-input-group {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-2);
+  }
+
+  #search-form .search-input-group .input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  #search-form .search-input-group .btn {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  /* Keep all filter selectors within the viewport */
+  #search-form .search-filter {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  #search-form .search-filter .input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  /* Align Reset Filters to the right */
+  #search-form #reset-filters {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  /* Allow long active filter labels to wrap */
+  #active-filters .chip {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+
+
 
