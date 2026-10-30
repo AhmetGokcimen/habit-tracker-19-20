@@ -2489,6 +2489,86 @@ button.reaction:hover {
   }
 }
 
+/* Subscription: pricing plan cards */
+.subscription-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+
+.subscription-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 28px;
+  border-radius: 16px;
+  transition: border-color 180ms ease;
+}
+
+.subscription-card h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 750;
+}
+
+.subscription-card h3 {
+  margin: 12px 0 4px;
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.subscription-card h3 small {
+  font-size: 0.85rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  opacity: 0.65;
+}
+
+.subscription-card ul {
+  display: grid;
+  gap: 14px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subscription-card li {
+  position: relative;
+  padding-left: 24px;
+  line-height: 1.5;
+}
+
+.subscription-card li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #23816f;
+  font-weight: 700;
+}
+
+/* Highlight Pro as the featured plan */
+.subscription-featured {
+  border: 2px solid #ff5e3a;
+}
+
+.subscription-featured .eyebrow {
+  color: #ff5e3a;
+  font-weight: 800;
+}
+
+/* Plan status labels */
+.subscription-card > p:last-child {
+  margin-top: auto;
+  padding: 12px;
+  border: 1px solid var(--ink, #0f2b2c);
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 700;
+}
+
 
 
 
