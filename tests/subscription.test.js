@@ -171,3 +171,51 @@ test('billing toggle updates prices and selected state', () => {
   assert.equal(get('billing-monthly').attributes['aria-pressed'], 'true');
 });
 
+test('subscription comparison table displays correct plan features', () => {
+  // The comparison table must exist.
+  assert.match(
+    subscriptionHtml,
+    /class="comparison-table"/
+  );
+
+  // Verify the three plan columns.
+  for (const plan of ['Free', 'Pro', 'Pro Max']) {
+    assert.match(
+      subscriptionHtml,
+      new RegExp(`<th scope="col">${plan}</th>`)
+    );
+  }
+
+  // Verify the plan feature matrix.
+  const rows = [
+    ...subscriptionHtml.matchAll(
+      /<tr>\s*<th scope="row">([^<]+)<\/th>\s*<td>([^<]+)<\/td>\s*<td>([^<]+)<\/td>\s*<td>([^<]+)<\/td>\s*<\/tr>/g
+    ),
+  ];
+
+  const features = new Map(
+    rows.map((row) => [row[1], row.slice(2, 5)])
+  );
+
+  assert.deepEqual(
+    features.get('Basic habit tracking'),
+    ['Yes', 'Yes', 'Yes']
+  );
+
+  assert.deepEqual(
+    features.get('Advanced analytics'),
+    ['—', 'Yes', 'Yes']
+  );
+
+  assert.deepEqual(
+    features.get('Unlimited AI (concept)'),
+    ['—', '—', 'Yes']
+  );
+
+  // Premium features must clearly be presented as a demo.
+  assert.match(
+    subscriptionHtml,
+    /no actual paid services or subscriptions are provided/i
+  );
+});
+

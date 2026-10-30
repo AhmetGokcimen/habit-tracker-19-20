@@ -2649,6 +2649,86 @@ button.reaction:hover {
   }
 }
 
+/* Subscription: plan feature comparison */
+
+.subscription-comparison {
+  margin-top: 48px;
+}
+
+.subscription-comparison .section-head {
+  margin-bottom: 20px;
+}
+
+/* Scrollable comparison container */
+.comparison-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 14px;
+}
+
+/* Comparison table layout */
+.comparison-table {
+  width: 100%;
+  min-width: 600px;
+  border-collapse: collapse;
+  text-align: center;
+}
+
+.comparison-table th,
+.comparison-table td {
+  padding: 17px 20px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+/* Column headings */
+.comparison-table thead {
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+
+.comparison-table thead th {
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+/* Feature names */
+.comparison-table th:first-child {
+  width: 40%;
+  text-align: left;
+}
+
+.comparison-table tbody th {
+  font-weight: 600;
+}
+
+/* Highlight Pro column subtly */
+.comparison-table thead th:nth-child(3) {
+  color: #ff5e3a;
+}
+
+/* Feature availability */
+.comparison-table tbody td {
+  font-weight: 600;
+}
+
+/* Row hover effect */
+.comparison-table tbody tr:hover {
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+
+/* Remove last row border */
+.comparison-table tbody tr:last-child th,
+.comparison-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Demo disclaimer */
+.subscription-disclaimer {
+  margin-top: 16px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
 
 
 
