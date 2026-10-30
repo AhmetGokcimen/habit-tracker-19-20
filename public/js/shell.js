@@ -26,6 +26,7 @@ const NAV = [
   { href: '/challenges.html', label: 'Challenges', key: 'challenges' },
   { href: '/explore.html', label: 'Explore', key: 'explore' },
   { href: '/subscription.html', label: 'Pricing', key: 'subscription' },
+  { href: '/contact.html', label: 'Contact', key: 'contact' },
   { href: '/profile.html', label: 'Profile', key: 'profile' },
 ];
 
