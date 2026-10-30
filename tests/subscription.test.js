@@ -57,3 +57,117 @@ test('Pricing navigation and page initialization are configured', () => {
     /src="\/js\/pages\/subscription\.js"/
   );
 });
+
+test('subscription billing controls and price elements are configured', () => {
+  // Monthly must be selected by default.
+  assert.match(
+    subscriptionHtml,
+    /id="billing-monthly"[^>]*aria-pressed="true"/
+  );
+
+  assert.match(
+    subscriptionHtml,
+    /id="billing-yearly"[^>]*aria-pressed="false"/
+  );
+
+  // Every plan must have separate price and period elements.
+  const plans = ['free', 'pro', 'pro-max'];
+
+  for (const plan of plans) {
+    assert.match(
+      subscriptionHtml,
+      new RegExp(`id="price-${plan}"`)
+    );
+
+    assert.match(
+      subscriptionHtml,
+      new RegExp(`id="period-${plan}"`)
+    );
+  }
+
+  // Check the initial monthly prices.
+  assert.match(subscriptionHtml, /id="price-free">€0<\/span>/);
+  assert.match(subscriptionHtml, /id="price-pro">€9<\/span>/);
+  assert.match(subscriptionHtml, /id="price-pro-max">€19<\/span>/);
+});
+
+test('billing toggle updates prices and selected state', () => {
+  const vm = require('node:vm');
+
+  const source = fs.readFileSync(
+    path.join(__dirname, '..', 'public', 'js', 'pages', 'subscription.js'),
+    'utf8'
+  );
+
+  // Test page behaviour without running the application shell.
+  const code = source.split('\n')
+    .filter((line) => !line.startsWith('import { initPage }'))
+    .filter((line) => !line.startsWith('await initPage('))
+    .join('\n');
+
+  function mockElement() {
+    const classes = new Set();
+
+    return {
+      textContent: '',
+      attributes: {},
+      handlers: {},
+      classList: {
+        toggle(name, enabled) {
+          if (enabled) classes.add(name);
+          else classes.delete(name);
+        },
+        contains(name) {
+          return classes.has(name);
+        },
+      },
+      setAttribute(name, value) {
+        this.attributes[name] = value;
+      },
+      addEventListener(name, handler) {
+        this.handlers[name] = handler;
+      },
+    };
+  }
+
+  const ids = [
+    'billing-monthly', 'billing-yearly',
+    'price-free', 'price-pro', 'price-pro-max',
+    'period-free', 'period-pro', 'period-pro-max',
+  ];
+
+  const elements = new Map(ids.map((id) => [id, mockElement()]));
+
+  vm.runInNewContext(code, {
+    document: {
+      getElementById: (id) => elements.get(id),
+    },
+  });
+
+  const get = (id) => elements.get(id);
+
+  // Monthly is selected by default.
+  assert.equal(get('price-pro').textContent, '€9');
+  assert.equal(get('price-pro-max').textContent, '€19');
+  assert.equal(get('billing-monthly').attributes['aria-pressed'], 'true');
+
+  // Switching to Yearly updates all prices.
+  get('billing-yearly').handlers.click();
+
+  assert.equal(get('price-free').textContent, '€0');
+  assert.equal(get('price-pro').textContent, '€90');
+  assert.equal(get('price-pro-max').textContent, '€190');
+  assert.equal(get('period-pro').textContent, '/ year');
+  assert.equal(get('billing-yearly').attributes['aria-pressed'], 'true');
+  assert.equal(get('billing-monthly').attributes['aria-pressed'], 'false');
+  assert.equal(get('billing-yearly').classList.contains('is-active'), true);
+
+  // Switching back restores monthly pricing.
+  get('billing-monthly').handlers.click();
+
+  assert.equal(get('price-pro').textContent, '€9');
+  assert.equal(get('price-pro-max').textContent, '€19');
+  assert.equal(get('period-pro').textContent, '/ month');
+  assert.equal(get('billing-monthly').attributes['aria-pressed'], 'true');
+});
+

@@ -33,10 +33,31 @@
         No payments or real subscriptions are available.
       </p>
 
-      <!-- Billing selector will be added later -->
-      <section class="section subscription-billing">
-        <p class="muted">Monthly pricing</p>
+      
+
+      <!-- Monthly / Yearly billing selector (frontend demo only) -->
+      <section class="section subscription-billing" aria-label="Billing options">
+      <p class="muted">Choose your billing period</p>
+
+      <div class="billing-toggle" role="group" aria-label="Billing period">
+        <button
+        class="btn billing-option is-active"
+        id="billing-monthly"
+        type="button"
+        aria-pressed="true">
+        Monthly
+        </button>
+
+        <button
+        class="btn billing-option"
+        id="billing-yearly"
+        type="button"
+        aria-pressed="false">
+        Yearly
+        </button>
+      </div>
       </section>
+
 
       <!-- Subscription plans -->
       <section class="section" aria-label="Subscription plans">
@@ -46,7 +67,7 @@
           <article class="card subscription-card">
             <h2>Free</h2>
             <p>Everything you need to get started.</p>
-            <h3>€0 <small>/ month</small></h3>
+            <h3><span id="price-free">€0</span> <small id="period-free">/ month</small></h3>
 
             <ul>
               <li>Basic habit tracking</li>
@@ -63,7 +84,7 @@
             <p class="eyebrow">MOST POPULAR</p>
             <h2>Pro</h2>
             <p>For serious habit builders.</p>
-            <h3>€9 <small>/ month</small></h3>
+            <h3><span id="price-pro">€9</span> <small id="period-pro">/ month</small></h3>
 
             <ul>
               <li>Everything in Free</li>
@@ -79,7 +100,7 @@
           <article class="card subscription-card">
             <h2>Pro Max</h2>
             <p>For the ultimate productivity enthusiast.</p>
-            <h3>€19 <small>/ month</small></h3>
+            <h3><span id="price-pro-max">€19</span> <small id="period-pro-max">/ month</small></h3>
 
             <ul>
               <li>Everything in Pro</li>

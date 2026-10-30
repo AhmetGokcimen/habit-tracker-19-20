@@ -2570,5 +2570,85 @@ button.reaction:hover {
 }
 
 
+/* Subscription: Monthly / Yearly billing toggle */
+.subscription-billing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.subscription-billing > p {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* Toggle container */
+.billing-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  background: #ffffff;
+  border: 1px solid #c8d6d3;
+  border-radius: 12px;
+}
+
+/* Toggle buttons */
+.billing-toggle .billing-option {
+  min-width: 120px;
+  min-height: 44px;
+  padding: 10px 20px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #0f2b2c;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 180ms ease,
+              border-color 180ms ease,
+              color 180ms ease;
+}
+
+/* Active selection */
+.billing-toggle .billing-option.is-active {
+  background: #0f2b2c;
+  color: #ffffff;
+  border-color: #0f2b2c;
+  font-weight: 800;
+}
+
+/* Hover effect */
+.billing-toggle .billing-option:hover:not(.is-active) {
+  background: #edf3f1;
+}
+
+/* Keyboard accessibility */
+.billing-toggle .billing-option:focus-visible {
+  outline: 2px solid #ff5e3a;
+  outline-offset: 3px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 420px) {
+  .billing-toggle {
+    width: 100%;
+  }
+
+  .billing-toggle .billing-option {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .billing-toggle .billing-option {
+    transition: none;
+  }
+}
+
+
 
 
