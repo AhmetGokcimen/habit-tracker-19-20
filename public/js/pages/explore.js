@@ -65,6 +65,51 @@ function renderChips() {
   );
 }
 
+
+function renderActiveFilters() {
+  const container = $('#active-filters');
+
+  const active = [
+    ['q', state.q, `Search: ${state.q}`],
+    ['category', state.category, `Category: ${state.category}`],
+    ['sort', state.sort !== 'newest', `Sort: ${state.sort}`],
+    ['frequency', state.frequency, `Frequency: ${state.frequency}`],
+    ['goal_type', state.goal_type, `Goal: ${state.goal_type}`],
+  ].filter(([, value]) => Boolean(value));
+
+  container.hidden = active.length === 0;
+
+  container.replaceChildren(...active.map(([key, , label]) => {
+    const button = el('button', {
+      class: 'chip chip-toggle',
+      text: `${label} ×`,
+      attrs: {
+        type: 'button',
+        'aria-label': `Remove ${label} filter`,
+      },
+    });
+
+    button.addEventListener('click', () => {
+      state = {
+        ...state,
+        [key]: key === 'sort' ? 'newest' : '',
+        page: 1,
+      };
+
+      form.q.value = state.q;
+      $('#sort').value = state.sort;
+      $('#frequency').value = state.frequency;
+      $('#goal-type').value = state.goal_type;
+
+      renderChips();
+      search();
+    });
+
+    return button;
+  }));
+}
+
+
 function resultCard(habit) {
   const comments = [
     habit.comment_count === 1 ? '1 comment' : `${habit.comment_count} comments`,
@@ -112,6 +157,7 @@ function pageButton(label, page, disabled) {
 
 async function search() {
   syncUrl();
+  renderActiveFilters();
   clearFormErrors(form);
   const params = new URLSearchParams({ page: String(state.page) });
   if (state.q) params.set('q', state.q);

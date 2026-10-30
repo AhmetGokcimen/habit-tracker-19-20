@@ -2402,3 +2402,38 @@ button.reaction:hover {
     padding-inline: var(--s-3);
   }
 }
+
+
+/* Explore: active filter indicators */
+#active-filters:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin-block: var(--s-3);
+}
+
+#active-filters[hidden] {
+  display: none;
+}
+
+#active-filters .chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+#active-filters .chip:hover {
+  border-color: var(--ink);
+}
+
+#active-filters .chip:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
