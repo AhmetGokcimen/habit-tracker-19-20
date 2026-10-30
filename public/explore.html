@@ -20,35 +20,57 @@
         </div>
       </header>
 
+      
       <form id="search-form" class="search-bar" role="search" novalidate>
-        <label class="visually-hidden" for="q">Search shared habits</label>
-        <input class="input" id="q" name="q" type="search" maxlength="50" placeholder="Search titles and descriptions" autocomplete="off" />        
-        <label class="visually-hidden" for="goal-type">Filter by goal type</label>
-        <select class="input" id="goal-type" name="goal_type">
-          <option value="">All Goals</option>
-          <option value="simple">Simple Check-in</option>
-          <option value="measurable">Measurable Goal</option>
-        </select>
-        <label class="visually-hidden" for="frequency">Filter by frequency</label>
-      <select class="input" id="frequency" name="frequency">
-        <option value="">All Schedules</option>
-        <option value="daily">Daily</option>
-        <option value="weekdays">Specific Days</option>
-        <option value="weekly">Weekly</option>
-      </select>
-              
-      <label class="visually-hidden" for="sort">Sort habits</label>
-      <select class="input" id="sort" name="sort">
-        <option value="newest">Newest First</option>
-        <option value="oldest">Oldest First</option>
-        <option value="popular">Most Popular</option>
-        <option value="discussed">Most Discussed</option>
-      </select>        
-        <button class="btn btn-primary" type="submit">Search</button> 
+
+        <!-- Search habits -->
+        <div class="search-input-group">
+          <label class="visually-hidden" for="q">Search shared habits</label>
+          <input class="input" id="q" name="q" type="search"
+                maxlength="50" placeholder="Search titles and descriptions"
+                autocomplete="off" />
+          <button class="btn btn-primary" type="submit">Search</button>
+        </div>
+
+        <!-- Sort By -->
+        <div class="search-filter">
+          <label class="visually-hidden" for="sort">Sort habits</label>
+          <select class="input" id="sort" name="sort">
+            <option value="newest">Newest First</option>
+            <option value="oldest">Oldest First</option>
+            <option value="popular">Most Popular</option>
+            <option value="discussed">Most Discussed</option>
+          </select>
+        </div>
+
+        <!-- Frequency -->
+        <div class="search-filter">
+          <label class="visually-hidden" for="frequency">Filter by frequency</label>
+          <select class="input" id="frequency" name="frequency">
+            <option value="">All Schedules</option>
+            <option value="daily">Daily</option>
+            <option value="weekdays">Specific Days</option>
+            <option value="weekly">Weekly</option>
+          </select>
+        </div>
+
+        <!-- Goal Type -->
+        <div class="search-filter">
+          <label class="visually-hidden" for="goal-type">Filter by goal type</label>
+          <select class="input" id="goal-type" name="goal_type">
+            <option value="">All Goals</option>
+            <option value="simple">Simple Check-in</option>
+            <option value="measurable">Measurable Goal</option>
+          </select>
+        </div>
+
+        <!-- Reset Filters -->
         <button class="btn btn-ghost" id="reset-filters" type="button">
           Reset Filters
         </button>
+
       </form>
+
       <div id="categories" class="chips" role="group" aria-label="Filter by category"></div>
 
       <section id="feed" class="section"></section>

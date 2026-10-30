@@ -2326,3 +2326,79 @@ button.reaction:hover {
 .theme-toggle {
   min-width: 2.4rem;
 }
+
+/* Explore: search and filter layout */
+#search-form.search-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 170px)) minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: center;
+}
+
+/* Keep search input and button on the same row */
+#search-form .search-input-group {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: stretch;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+#search-form .search-input-group .input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}
+
+#search-form .search-input-group .btn {
+  min-height: 56px;
+  flex-shrink: 0;
+}
+
+/* Compact filter selectors */
+#search-form .search-filter {
+  min-width: 0;
+}
+
+#search-form .search-filter .input {
+  width: 100%;
+  min-width: 0;
+  font-size: var(--step-0);
+}
+
+/* Reset button below the filters, aligned right */
+#search-form #reset-filters {
+  grid-column: 4;
+  justify-self: end;
+}
+
+/* Tablet layout */
+@media (max-width: 900px) {
+  #search-form.search-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #search-form .search-input-group {
+    grid-column: 1 / -1;
+  }
+
+  #search-form #reset-filters {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+}
+
+/* Mobile layout */
+@media (max-width: 600px) {
+  #search-form.search-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #search-form .search-input-group {
+    grid-column: 1;
+  }
+
+  #search-form .search-input-group .btn {
+    padding-inline: var(--s-3);
+  }
+}
