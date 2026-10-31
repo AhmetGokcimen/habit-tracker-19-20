@@ -122,3 +122,26 @@ test('footer links use coral underline on hover', () => {
     /\.footer-links a:hover\s*\{[^}]*text-decoration-color:\s*#ff5e3a;/
   );
 });
+
+test('footer displays clearly fictional SaaS awards', () => {
+  const start = shell.indexOf("class: 'footer-awards'");
+  const end = shell.indexOf('// Footer bottom', start);
+
+  assert.ok(start !== -1, 'Awards section is missing');
+  assert.ok(end > start, 'Awards section is misplaced');
+
+  const awards = shell.slice(start, end);
+
+  // Verify the three fictional awards.
+  assert.match(awards, /SaaS of the Year/);
+  assert.match(awards, /Best Startup/);
+  assert.match(awards, /Habit Innovation/);
+
+  // The awards section must be clearly identified as fictional.
+  assert.match(awards, /Fictional demo awards/);
+  assert.match(awards, /Parody Award/);
+  assert.match(
+    awards,
+    /no real awards or endorsements are claimed/i
+  );
+});

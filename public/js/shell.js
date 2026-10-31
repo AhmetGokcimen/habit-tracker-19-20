@@ -180,6 +180,43 @@ function renderFooter() {
         ),
 
       ),
+      
+      // Fictional awards for the educational demo.
+      // These are parody badges, not real achievements.
+      el(
+        'section',
+        {
+          class: 'footer-awards',
+          attrs: { 'aria-label': 'Fictional demo awards' },
+        },
+        el('h3', {
+          class: 'footer-awards-heading',
+          text: 'Our Completely Imaginary Achievements',
+        }),
+        el(
+          'div',
+          { class: 'footer-awards-list' },
+
+          el('div', { class: 'footer-award' },
+            el('strong', { text: 'SaaS of the Year' }),
+            el('span', { text: 'Parody Award' }),
+          ),
+
+          el('div', { class: 'footer-award' },
+            el('strong', { text: 'Best Startup' }),
+            el('span', { text: 'Fictional 2026' }),
+          ),
+
+          el('div', { class: 'footer-award' },
+            el('strong', { text: 'Habit Innovation' }),
+            el('span', { text: 'Imaginary Award' }),
+          ),
+        ),
+        el('p', {
+          class: 'footer-awards-note',
+          text: 'Just for fun — no real awards or endorsements are claimed.',
+        }),
+      ),
 
       // Footer bottom
       el(
