@@ -2940,5 +2940,33 @@ button.reaction:hover {
   }
 }
 
+/* Mobile navigation: improve horizontal scrolling */
+@media (max-width: 640px) {
+  .topbar .nav {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+
+    /* Make additional navigation items discoverable */
+    scrollbar-width: thin;
+    scrollbar-color: var(--ink) transparent;
+  }
+
+  .topbar .nav::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .topbar .nav::-webkit-scrollbar-thumb {
+    background: var(--ink);
+    border-radius: 4px;
+  }
+
+  .topbar .nav::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
 
 
