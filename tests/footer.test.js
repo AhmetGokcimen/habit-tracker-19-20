@@ -145,3 +145,34 @@ test('footer displays clearly fictional SaaS awards', () => {
     /no real awards or endorsements are claimed/i
   );
 });
+
+test('fictional award badges have responsive styling', () => {
+  const css = fs.readFileSync(
+    path.join(__dirname, '..', 'public', 'css', 'app.css'),
+    'utf8'
+  );
+
+  // Three award cards should appear side by side on desktop.
+  assert.match(
+    css,
+    /\.footer-awards-list\s*\{[^}]*grid-template-columns:\s*repeat\(3,\s*minmax\(0,\s*1fr\)\)/
+  );
+
+  // Award seals must have decorative styling.
+  assert.match(
+    css,
+    /\.footer-award::before\s*\{[^}]*content:\s*"★"/
+  );
+
+  // Mobile screens should display one award per row.
+  assert.match(
+    css,
+    /@media\s*\(max-width:\s*480px\)\s*\{[\s\S]*?\.footer-awards-list\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/
+  );
+
+  // Fictional award disclaimer should be styled.
+  assert.match(
+    css,
+    /\.footer-awards-note\s*\{[^}]*text-align:\s*center/
+  );
+});

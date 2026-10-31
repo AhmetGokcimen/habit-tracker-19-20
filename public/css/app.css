@@ -3265,6 +3265,103 @@ button.reaction:hover {
   }
 }
 
+/* Footer: fictional SaaS award badges */
+.footer-awards {
+  grid-column: 1 / -1;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+
+.footer-awards-heading {
+  margin: 0 0 24px;
+  font-size: 1.05rem;
+  font-weight: 750;
+  text-align: center;
+  letter-spacing: -0.02em;
+}
+
+/* Three award badges on desktop */
+.footer-awards-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+/* Individual award badge */
+.footer-award {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 24px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  text-align: center;
+}
+
+/* Decorative award seal */
+.footer-award::before {
+  content: "★";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 6px;
+  border: 2px solid #bb9564;
+  border-radius: 50%;
+  color: #bb9564;
+  font-size: 28px;
+  line-height: 1;
+}
+
+/* Award title */
+.footer-award strong {
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+/* Fictional award label */
+.footer-award span {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+/* Transparent fictional award disclaimer */
+.footer-awards-note {
+  margin: 20px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  text-align: center;
+  opacity: 0.7;
+}
+
+/* Tablet layout */
+@media (max-width: 760px) {
+  .footer-awards-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Mobile layout */
+@media (max-width: 480px) {
+  .footer-awards-list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .footer-award {
+    padding: 20px 16px;
+  }
+}
+
 
 
 
