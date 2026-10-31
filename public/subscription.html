@@ -1,0 +1,189 @@
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Pricing · Habit Tracker</title>
+
+    <script src="/js/theme.js"></script>
+    <script type="module" src="/js/pages/subscription.js"></script>
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="/css/app.css" />
+  </head>
+
+  <body>
+    <header id="topbar" class="topbar"></header>
+
+    <main id="main" class="page">
+      <header class="page-head">
+        <div>
+          <p class="eyebrow">PLANS & PRICING</p>
+          <h1>Find your perfect plan.</h1>
+          <p class="lede">
+            Start building better habits for free.
+            Unlock your imaginary superpowers with Pro.
+          </p>
+        </div>
+      </header>
+
+      <!-- Demo notice -->
+      <p class="muted">
+        These plans are for demonstration only.
+        No payments or real subscriptions are available.
+      </p>
+
+      
+
+      <!-- Monthly / Yearly billing selector (frontend demo only) -->
+      <section class="section subscription-billing" aria-label="Billing options">
+      <p class="muted">Choose your billing period</p>
+
+      <div class="billing-toggle" role="group" aria-label="Billing period">
+        <button
+        class="btn billing-option is-active"
+        id="billing-monthly"
+        type="button"
+        aria-pressed="true">
+        Monthly
+        </button>
+
+        <button
+        class="btn billing-option"
+        id="billing-yearly"
+        type="button"
+        aria-pressed="false">
+        Yearly
+        </button>
+      </div>
+      </section>
+
+
+      <!-- Subscription plans -->
+      <section class="section" aria-label="Subscription plans">
+        <div class="grid subscription-grid">
+
+          <!-- Free Plan -->
+          <article class="card subscription-card">
+            <h2>Free</h2>
+            <p>Everything you need to get started.</p>
+            <h3><span id="price-free">€0</span> <small id="period-free">/ month</small></h3>
+
+            <ul>
+              <li>Basic habit tracking</li>
+              <li>Daily streaks</li>
+              <li>Community access</li>
+              <li>Basic statistics</li>
+            </ul>
+
+            <p class="muted">Current Plan</p>
+          </article>
+
+          <!-- Pro Plan -->
+          <article class="card subscription-card subscription-featured">
+            <p class="eyebrow">MOST POPULAR</p>
+            <h2>Pro</h2>
+            <p>For serious habit builders.</p>
+            <h3><span id="price-pro">€9</span> <small id="period-pro">/ month</small></h3>
+
+            <ul>
+              <li>Everything in Free</li>
+              <li>Advanced statistics</li>
+              <li>AI habit coach (demo)</li>
+              <li>Smart reminders</li>
+            </ul>
+
+            <p class="muted">Demo Plan</p>
+          </article>
+
+          <!-- Pro Max Plan -->
+          <article class="card subscription-card">
+            <h2>Pro Max</h2>
+            <p>For the ultimate productivity enthusiast.</p>
+            <h3><span id="price-pro-max">€19</span> <small id="period-pro-max">/ month</small></h3>
+
+            <ul>
+              <li>Everything in Pro</li>
+              <li>Unlimited AI coaching (demo)</li>
+              <li>Exclusive achievements</li>
+              <li>Priority support (imaginary)</li>
+            </ul>
+
+            <p class="muted">Demo Plan</p>
+          </article>
+
+        </div>
+      </section>
+      
+        <!-- Subscription plan feature comparison (demo only) -->
+        <section class="section subscription-comparison"
+                aria-labelledby="comparison-heading">
+
+        <div class="section-head">
+            <div>
+            <h2 id="comparison-heading">Compare Plans</h2>
+            <p class="muted">
+                Find out what each demo plan has to offer.
+            </p>
+            </div>
+        </div>
+        <!-- Mobile hint for horizontal plan comparison -->
+        <p class="comparison-scroll-hint">
+        Swipe horizontally to compare all plans →
+        </p>
+        <div class="comparison-table-wrapper">
+            <table class="comparison-table">
+            <caption class="visually-hidden">
+                Comparison of Free, Pro, and Pro Max demo plans
+            </caption>
+
+            <thead>
+                <tr>
+                <th scope="col">Features</th>
+                <th scope="col">Free</th>
+                <th scope="col">Pro</th>
+                <th scope="col">Pro Max</th>
+                </tr>
+            </thead>
+
+            <tbody>
+                <tr>
+                <th scope="row">Basic habit tracking</th>
+                <td>Yes</td><td>Yes</td><td>Yes</td>
+                </tr>
+                <tr>
+                <th scope="row">Daily streaks</th>
+                <td>Yes</td><td>Yes</td><td>Yes</td>
+                </tr>
+                <tr>
+                <th scope="row">Community access</th>
+                <td>Yes</td><td>Yes</td><td>Yes</td>
+                </tr>
+                <tr>
+                <th scope="row">Advanced analytics</th>
+                <td>—</td><td>Yes</td><td>Yes</td>
+                </tr>
+                <tr>
+                <th scope="row">AI habit coach (concept)</th>
+                <td>—</td><td>Yes</td><td>Yes</td>
+                </tr>
+                <tr>
+                <th scope="row">Unlimited AI (concept)</th>
+                <td>—</td><td>—</td><td>Yes</td>
+                </tr>
+                <tr>
+                <th scope="row">Priority support (concept)</th>
+                <td>—</td><td>—</td><td>Yes</td>
+                </tr>
+            </tbody>
+            </table>
+        </div>
+
+        <p class="muted subscription-disclaimer">
+            Demo comparison only. Premium features are illustrative;
+            no actual paid services or subscriptions are provided.
+        </p>
+        </section>
+    </main>
+  </body>
+</html>

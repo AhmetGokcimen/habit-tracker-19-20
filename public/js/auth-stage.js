@@ -37,7 +37,7 @@ export function setupAuthStage() {
   enableParallax(stage);
   $('.brand-slot')?.replaceChildren(brandMark());
 
-  const mascot = createMascot($('#mascot'));
+  const mascot = createMascot($('#mascot'), { covering: false });
   bindPasswordMascot(mascot, $('#password'), $('#toggle-password'));
   return mascot;
 }

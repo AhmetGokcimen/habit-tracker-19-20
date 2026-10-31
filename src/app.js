@@ -39,6 +39,7 @@ function createApp() {
           styleSrc: ["'self'"],
           imgSrc: ["'self'", 'blob:'],
           connectSrc: ["'self'"],
+          frameSrc: ["'self'", 'https://www.openstreetmap.org'],
           fontSrc: ["'self'"],
           objectSrc: ["'none'"],
           baseUri: ["'none'"],

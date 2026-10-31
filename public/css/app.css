@@ -25,15 +25,14 @@
   --topbar-bg: rgba(230, 239, 236, 0.82);
   --card-glass: rgba(251, 253, 252, 0.6);
   --row-hover: #f3f8f6;
-  --warm-tint: var(--warm-tint);
-  --warm-line: var(--warm-line);
-  --yellow-tint: var(--yellow-tint);
+  --warm-tint: #fff0e6;
+  --warm-line: #e8c4b2;
+  --yellow-tint: #fff5d6;
   --danger-tint: #fbe4e1;
   --danger-line: #e5b9b4;
-  --ice: var(--ice);
-  --ice-line: var(--ice-line);
-  --ice-ink: var(--ice-ink);
-
+  --ice: #e8f3f8;
+  --ice-line: #bddce8;
+  --ice-ink: #24596f;
   /* Type */
   --font-display: 'Bricolage Grotesque Variable', 'Segoe UI', system-ui, sans-serif;
   --font-body: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
@@ -2326,3 +2325,1042 @@ button.reaction:hover {
 .theme-toggle {
   min-width: 2.4rem;
 }
+
+/* Explore: search and filter layout */
+#search-form.search-bar {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 170px)) minmax(0, 1fr);
+  gap: var(--s-3);
+  align-items: center;
+}
+
+/* Keep search input and button on the same row */
+#search-form .search-input-group {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: stretch;
+  gap: var(--s-2);
+  min-width: 0;
+}
+
+#search-form .search-input-group .input {
+  flex: 1;
+  width: 100%;
+  min-width: 0;
+}
+
+#search-form .search-input-group .btn {
+  min-height: 56px;
+  flex-shrink: 0;
+}
+
+/* Compact filter selectors */
+#search-form .search-filter {
+  min-width: 0;
+}
+
+#search-form .search-filter .input {
+  width: 104%;
+  min-width: 0;
+  font-size: var(--step-0);
+}
+
+/* Reset button below the filters, aligned right */
+#search-form #reset-filters {
+  grid-column: 4;
+  justify-self: end;
+}
+
+/* Tablet layout */
+@media (max-width: 900px) {
+  #search-form.search-bar {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #search-form .search-input-group {
+    grid-column: 1 / -1;
+  }
+
+  #search-form #reset-filters {
+  grid-column: 1 / -1;
+  justify-self: end;
+}
+}
+
+/* Mobile layout */
+@media (max-width: 600px) {
+  #search-form.search-bar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  #search-form .search-input-group {
+    grid-column: 1;
+  }
+
+  #search-form .search-input-group .btn {
+    padding-inline: var(--s-3);
+  }
+}
+
+
+/* Explore: active filter indicators */
+#active-filters:not([hidden]) {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--s-2);
+  margin-block: var(--s-3);
+}
+
+#active-filters[hidden] {
+  display: none;
+}
+
+#active-filters .chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-2);
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+#active-filters .chip:hover {
+  border-color: var(--ink);
+}
+
+#active-filters .chip:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 3px;
+}
+
+
+/* Explore: mobile search and filter refinements */
+@media (max-width: 600px) {
+  #search-form.search-bar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-2);
+  }
+
+  /* Full-width search input and button */
+  #search-form .search-input-group {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--s-2);
+  }
+
+  #search-form .search-input-group .input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  #search-form .search-input-group .btn {
+    width: 100%;
+    min-height: 48px;
+  }
+
+  /* Keep all filter selectors within the viewport */
+  #search-form .search-filter {
+    grid-column: 1 / -1;
+    min-width: 0;
+  }
+
+  #search-form .search-filter .input {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+  }
+
+  /* Align Reset Filters to the right */
+  #search-form #reset-filters {
+    grid-column: 1 / -1;
+    justify-self: end;
+  }
+
+  /* Allow long active filter labels to wrap */
+  #active-filters .chip {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* Subscription: pricing plan cards */
+.subscription-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+
+.subscription-card {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+  padding: 28px;
+  border-radius: 16px;
+  transition: border-color 180ms ease;
+}
+
+.subscription-card h2 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 750;
+}
+
+.subscription-card h3 {
+  margin: 12px 0 4px;
+  font-size: clamp(2rem, 3vw, 2.8rem);
+  font-weight: 800;
+  letter-spacing: -0.04em;
+}
+
+.subscription-card h3 small {
+  font-size: 0.85rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  opacity: 0.65;
+}
+
+.subscription-card ul {
+  display: grid;
+  gap: 14px;
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.subscription-card li {
+  position: relative;
+  padding-left: 24px;
+  line-height: 1.5;
+}
+
+.subscription-card li::before {
+  content: "✓";
+  position: absolute;
+  left: 0;
+  color: #23816f;
+  font-weight: 700;
+}
+
+/* Highlight Pro as the featured plan */
+.subscription-featured {
+  border: 2px solid #ff5e3a;
+}
+
+.subscription-featured .eyebrow {
+  color: #ff5e3a;
+  font-weight: 800;
+}
+
+/* Plan status labels */
+.subscription-card > p:last-child {
+  margin-top: auto;
+  padding: 12px;
+  border: 1px solid var(--ink, #0f2b2c);
+  border-radius: 8px;
+  text-align: center;
+  font-weight: 700;
+}
+
+
+/* Subscription: Monthly / Yearly billing toggle */
+.subscription-billing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.subscription-billing > p {
+  margin: 0;
+  font-weight: 600;
+}
+
+/* Toggle container */
+.billing-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px;
+  background: #ffffff;
+  border: 1px solid #c8d6d3;
+  border-radius: 12px;
+}
+
+/* Toggle buttons */
+.billing-toggle .billing-option {
+  min-width: 120px;
+  min-height: 44px;
+  padding: 10px 20px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: #0f2b2c;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 180ms ease,
+              border-color 180ms ease,
+              color 180ms ease;
+}
+
+/* Active selection */
+.billing-toggle .billing-option.is-active {
+  background: #0f2b2c;
+  color: #ffffff;
+  border-color: #0f2b2c;
+  font-weight: 800;
+}
+
+/* Hover effect */
+.billing-toggle .billing-option:hover:not(.is-active) {
+  background: #edf3f1;
+}
+
+/* Keyboard accessibility */
+.billing-toggle .billing-option:focus-visible {
+  outline: 2px solid #ff5e3a;
+  outline-offset: 3px;
+}
+
+/* Mobile responsiveness */
+@media (max-width: 420px) {
+  .billing-toggle {
+    width: 100%;
+  }
+
+  .billing-toggle .billing-option {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+/* Reduced motion accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .billing-toggle .billing-option {
+    transition: none;
+  }
+}
+
+/* Subscription: plan feature comparison */
+
+.subscription-comparison {
+  margin-top: 48px;
+}
+
+.subscription-comparison .section-head {
+  margin-bottom: 20px;
+}
+
+/* Scrollable comparison container */
+.comparison-table-wrapper {
+  width: 100%;
+  overflow-x: auto;
+  border: 1px solid color-mix(in srgb, currentColor 18%, transparent);
+  border-radius: 14px;
+}
+
+/* Comparison table layout */
+.comparison-table {
+  width: 100%;
+  min-width: 600px;
+  border-collapse: collapse;
+  text-align: center;
+}
+
+.comparison-table th,
+.comparison-table td {
+  padding: 17px 20px;
+  border-bottom: 1px solid color-mix(in srgb, currentColor 12%, transparent);
+}
+
+/* Column headings */
+.comparison-table thead {
+  background: color-mix(in srgb, currentColor 5%, transparent);
+}
+
+.comparison-table thead th {
+  font-weight: 800;
+  font-size: 0.95rem;
+}
+
+/* Feature names */
+.comparison-table th:first-child {
+  width: 40%;
+  text-align: left;
+}
+
+.comparison-table tbody th {
+  font-weight: 600;
+}
+
+/* Highlight Pro column subtly */
+.comparison-table thead th:nth-child(3) {
+  color: #ff5e3a;
+}
+
+/* Feature availability */
+.comparison-table tbody td {
+  font-weight: 600;
+}
+
+/* Row hover effect */
+.comparison-table tbody tr:hover {
+  background: color-mix(in srgb, currentColor 4%, transparent);
+}
+
+/* Remove last row border */
+.comparison-table tbody tr:last-child th,
+.comparison-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Demo disclaimer */
+.subscription-disclaimer {
+  margin-top: 16px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+/* Subscription: responsive pricing cards */
+@media (max-width: 760px) {
+
+  /* Stack subscription cards vertically */
+  .subscription-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 18px;
+  }
+
+  /* Give each card enough space */
+  .subscription-card {
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 22px;
+    gap: 14px;
+  }
+
+  /* Keep pricing readable */
+  .subscription-card h3 {
+    font-size: 2.4rem;
+    margin-top: 8px;
+  }
+
+  .subscription-card h3 small {
+    font-size: 0.85rem;
+  }
+
+  /* Improve feature list spacing */
+  .subscription-card ul {
+    gap: 12px;
+  }
+
+  /* Full-width plan status */
+  .subscription-card > p:last-child {
+    width: 100%;
+    box-sizing: border-box;
+    margin-top: auto;
+  }
+}
+/* Subscription: mobile comparison scroll hint */
+.comparison-scroll-hint {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .comparison-scroll-hint {
+    display: block;
+    margin: 0 0 12px;
+    font-size: 0.85rem;
+    opacity: 0.75;
+  }
+
+  .comparison-table-wrapper {
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+  }
+}
+
+/* Contact: professional information cards */
+.contact-section {
+  margin-top: 36px;
+}
+
+.contact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+  align-items: stretch;
+}
+
+.contact-card {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+  padding: 28px;
+  border-radius: 14px;
+  transition: border-color 180ms ease;
+}
+
+.contact-card h3 {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 750;
+}
+
+.contact-card > p {
+  margin: 0;
+  line-height: 1.65;
+}
+
+.contact-detail {
+  margin-top: auto !important;
+  padding-top: 18px;
+  border-top: 1px solid
+    color-mix(in srgb, currentColor 14%, transparent);
+  font-weight: 600;
+}
+
+/* Contact: office location */
+.contact-location {
+  margin-top: 40px;
+}
+
+.contact-office {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr);
+  gap: 24px;
+  align-items: stretch;
+  padding: 24px;
+  border-radius: 14px;
+}
+
+.contact-address {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  justify-content: center;
+}
+
+.contact-address h3 {
+  margin: 0;
+  font-size: 1.3rem;
+}
+
+.contact-address p {
+  margin: 0;
+  line-height: 1.6;
+}
+
+/* Map area before the office location is confirmed */
+.contact-map-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 250px;
+  padding: 24px;
+  border: 1px dashed
+    color-mix(in srgb, currentColor 28%, transparent);
+  border-radius: 12px;
+  background:
+    color-mix(in srgb, currentColor 3%, transparent);
+  text-align: center;
+}
+
+.contact-map-placeholder p {
+  max-width: 280px;
+  line-height: 1.7;
+}
+
+/* Contact disclaimer */
+.contact-disclaimer {
+  margin-top: 24px;
+  font-size: 0.85rem;
+  line-height: 1.6;
+}
+
+/* Tablet and mobile layout */
+@media (max-width: 760px) {
+  .contact-grid,
+  .contact-office {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .contact-card,
+  .contact-office {
+    padding: 22px;
+  }
+
+  .contact-map-placeholder {
+    min-height: 220px;
+  }
+}
+
+/* Accessibility */
+@media (prefers-reduced-motion: reduce) {
+  .contact-card {
+    transition: none;
+  }
+}
+
+/* Contact: embedded demo map */
+.contact-map {
+  width: 100%;
+  min-width: 0;
+  min-height: 260px;
+  overflow: hidden;
+  border: 1px solid
+    color-mix(in srgb, currentColor 16%, transparent);
+  border-radius: 12px;
+}
+
+.contact-map iframe {
+  display: block;
+  width: 100%;
+  height: 280px;
+  border: 0;
+}
+
+/* Responsive demo map */
+@media (max-width: 760px) {
+  .contact-map {
+    min-height: 240px;
+  }
+
+  .contact-map iframe {
+    height: 240px;
+  }
+}
+
+/* Mobile navigation: improve horizontal scrolling */
+@media (max-width: 640px) {
+  .topbar .nav {
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+
+    /* Make additional navigation items discoverable */
+    scrollbar-width: thin;
+    scrollbar-color: var(--ink) transparent;
+  }
+
+  .topbar .nav::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .topbar .nav::-webkit-scrollbar-thumb {
+    background: var(--ink);
+    border-radius: 4px;
+  }
+
+  .topbar .nav::-webkit-scrollbar-track {
+    background: transparent;
+  }
+}
+
+/* Footer: professional SaaS layout */
+.site-footer {
+  margin-top: 64px;
+  padding: 48px 24px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+}
+
+.site-footer-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr);
+  gap: 48px;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+/* Brand section */
+.footer-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.footer-logo {
+  color: inherit;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+}
+
+.footer-brand p {
+  max-width: 300px;
+  margin: 0;
+  line-height: 1.7;
+  opacity: 0.7;
+}
+
+/* Footer navigation columns */
+.footer-links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.footer-links nav,
+.footer-legal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.footer-links h3 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.footer-links a {
+  color: inherit;
+  font-size: 0.9rem;
+  text-decoration: none;
+  opacity: 0.7;
+  transition: opacity 180ms ease;
+}
+
+
+/* Footer links: coral underline on hover */
+.footer-links a:hover {
+  opacity: 1;
+  text-decoration: underline;
+  text-decoration-color: #ff5e3a;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 5px;
+}
+
+
+.footer-links a:focus-visible,
+.footer-logo:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+
+.footer-legal p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  opacity: 0.6;
+}
+
+/* Footer bottom copyright */
+.footer-bottom {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.footer-bottom p {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.65;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .footer-links a {
+    transition: none;
+  }
+}
+
+/* Footer: responsive layout for tablets and mobile */
+@media (max-width: 760px) {
+
+  .site-footer {
+    margin-top: 48px;
+    padding: 36px 20px 24px;
+  }
+
+  /* Stack brand and navigation vertically */
+  .site-footer-inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+
+  /* Keep brand name on a single line */
+  .footer-brand {
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .footer-logo {
+    white-space: nowrap;
+  }
+
+  .footer-brand p {
+    max-width: 360px;
+  }
+
+  /* Product and Company side by side */
+  .footer-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px 20px;
+  }
+
+  .footer-links nav,
+  .footer-legal {
+    min-width: 0;
+  }
+
+  /* Place Legal on a separate row */
+  .footer-legal {
+    grid-column: 1 / -1;
+  }
+
+  /* Copyright below all sections */
+  .footer-bottom {
+    grid-column: 1 / -1;
+    padding-top: 20px;
+  }
+}
+
+/* Footer: smaller phone screens */
+@media (max-width: 420px) {
+
+  .site-footer {
+    padding: 30px 18px 22px;
+  }
+
+  .footer-links {
+    gap: 24px 16px;
+  }
+
+  .footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+/* Legal Pages: Privacy Policy and Terms of Use */
+
+.legal-page {
+  width: 100%;
+  max-width: 900px;
+  margin-inline: auto;
+}
+
+/* Legal page introduction */
+.legal-page .page-head {
+  margin-bottom: 32px;
+  padding-bottom: 28px;
+  border-bottom: 1px solid var(--line);
+}
+
+.legal-page .page-head h1 {
+  font-size: clamp(2.2rem, 5vw, 3.5rem);
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+
+.legal-page .lede {
+  max-width: 720px;
+  line-height: 1.7;
+}
+
+/* Legal content sections */
+.legal-page .legal-content {
+  margin: 0;
+  padding: 28px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.legal-page .legal-content:last-child {
+  border-bottom: none;
+}
+
+/* Section headings */
+.legal-page .legal-content h2 {
+  margin: 0 0 18px;
+  font-size: clamp(1.2rem, 2vw, 1.5rem);
+  font-weight: 750;
+  line-height: 1.35;
+}
+
+/* Body paragraphs */
+.legal-page .legal-content p {
+  max-width: 760px;
+  margin: 0 0 16px;
+  line-height: 1.85;
+  font-size: 0.98rem;
+}
+
+.legal-page .legal-content p:last-child {
+  margin-bottom: 0;
+}
+
+/* Legal lists */
+.legal-page .legal-content ul {
+  display: grid;
+  gap: 12px;
+  max-width: 760px;
+  margin: 16px 0 22px;
+  padding-left: 24px;
+  list-style: disc;
+}
+
+.legal-page .legal-content li {
+  line-height: 1.75;
+  padding-left: 4px;
+}
+
+/* Legal links */
+.legal-page .legal-content a {
+  text-underline-offset: 4px;
+}
+
+.legal-page .legal-content a:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+
+/* Tablet and mobile */
+@media (max-width: 760px) {
+  .legal-page .page-head {
+    margin-bottom: 20px;
+    padding-bottom: 22px;
+  }
+
+  .legal-page .legal-content {
+    padding: 22px 0;
+  }
+
+  .legal-page .legal-content p {
+    font-size: 0.95rem;
+    line-height: 1.75;
+  }
+
+  .legal-page .legal-content ul {
+    padding-left: 20px;
+    gap: 10px;
+  }
+
+  .legal-page .legal-content li {
+    line-height: 1.65;
+  }
+}
+
+/* Footer: fictional SaaS award badges */
+.footer-awards {
+  grid-column: 1 / -1;
+  padding-top: 28px;
+  border-top: 1px solid var(--line);
+}
+
+.footer-awards-heading {
+  margin: 0 0 24px;
+  font-size: 1.05rem;
+  font-weight: 750;
+  text-align: center;
+  letter-spacing: -0.02em;
+}
+
+/* Three award badges on desktop */
+.footer-awards-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+/* Individual award badge */
+.footer-award {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 24px 16px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--card);
+  text-align: center;
+}
+
+/* Decorative award seal */
+.footer-award::before {
+  content: "★";
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 6px;
+  border: 2px solid #bb9564;
+  border-radius: 50%;
+  color: #bb9564;
+  font-size: 28px;
+  line-height: 1;
+}
+
+/* Award title */
+.footer-award strong {
+  font-size: 0.95rem;
+  font-weight: 800;
+  line-height: 1.4;
+}
+
+/* Fictional award label */
+.footer-award span {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.65;
+}
+
+/* Transparent fictional award disclaimer */
+.footer-awards-note {
+  margin: 20px 0 0;
+  font-size: 0.8rem;
+  line-height: 1.6;
+  text-align: center;
+  opacity: 0.7;
+}
+
+/* Tablet layout */
+@media (max-width: 760px) {
+  .footer-awards-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Mobile layout */
+@media (max-width: 480px) {
+  .footer-awards-list {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .footer-award {
+    padding: 20px 16px;
+  }
+}
+
+
+
+

@@ -109,11 +109,16 @@ const mineQuery = z.strictObject({
 });
 
 // Query strings: repeated keys (?q=a&q=b) arrive as arrays and fail z.string().
+// Validate public habit search, category filters, sorting, and pagination.
 const habitSearch = z.strictObject({
   q: z.string().trim().max(50, 'Search text must be at most 50 characters').optional(),
   category: z.enum(CATEGORIES, 'Unknown category').optional(),
+  frequency: z.enum(['daily', 'weekdays', 'weekly']).optional(),
+  goal_type: z.enum(['simple', 'measurable']).optional(),
   page: z.coerce.number().int().min(1).max(1000).default(1),
+  sort: z.enum(['newest', 'oldest', 'popular', 'discussed']).default('newest'),
 });
+  
 
 // YYYY-MM-DD, a real calendar day, not before 2000 and not in the future
 // (one day of slack for users in time zones ahead of UTC).

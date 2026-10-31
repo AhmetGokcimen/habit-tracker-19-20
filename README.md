@@ -16,6 +16,28 @@ It was built for the course's **19/20 security challenge**: an Express 5 JSON AP
 - **Badges** for milestones, **statistics** (completion rate, by weekday and category, per habit), **reminders** while the app is open, **undo** and back-filling past days, **archive** and **drag-to-arrange**, **export** to JSON / CSV and a **dark mode**.
 - **Together** — public profiles, following and a feed, one-tap reactions, "add to my habits", and admin-run **challenges** with an opt-in leaderboard.
 
+
+### Additional Features and UI Improvements
+
+- **Interactive login mascot** — Sprout starts with its eyes open and covers them only when the password field is focused and the password is hidden. Its animation stays synchronized with the Show/Hide button.
+
+- **Advanced Explore filtering** — Search public habits using text, categories, frequency (daily, weekly, or specific weekdays), and goal type (simple or measurable). Sort results by newest, oldest, most popular, or most discussed.
+
+- **Improved Explore interface** — Responsive search controls, compact filter selectors, removable active-filter chips, and a Reset Filters option.
+
+- **Subscription Plans (Demo)** — A frontend-only Pricing page featuring Free, Pro, and Pro Max plans, interactive monthly/yearly pricing, and a feature comparison table. No real payments, premium activation, or subscription backend are implemented.
+
+- **Contact Page** — Dedicated contact information sections and an interactive OpenStreetMap demonstration map showing central Bucharest. The map does not represent an actual office, and contact details remain unconfirmed.
+
+- **Shared SaaS Footer** — Reusable footer with Product, Company, and Legal navigation, responsive layouts, and consistent interaction styling.
+
+- **Legal Pages** — Publicly accessible Privacy Policy and Terms of Use pages describing the educational application, its documented data handling, user responsibilities, and limitations.
+
+- **Fictional SaaS Awards** — Decorative parody awards, including SaaS of the Year, Best Startup, and Habit Innovation. All awards are explicitly fictional and do not imply real endorsements.
+
+- **Design System Improvements** — Refined light-theme color tokens, consistent visual styling, improved mobile layouts, and additional automated tests for new features.
+
+
 ## Run it locally
 
 Requires **Node.js 24 or newer**.
