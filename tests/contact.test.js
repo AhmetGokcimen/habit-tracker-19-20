@@ -37,6 +37,15 @@ test('contact page contains email, phone and office sections', () => {
   /src="https:\/\/www\.openstreetmap\.org\/export\/embed\.html\?/);
 });
 
+test('the third-party map iframe is sandboxed and sends no referrer', () => {
+  const iframe = contactHtml.match(/<iframe[\s\S]*?>/)[0];
+  // Scripts run only inside OpenStreetMap's own origin: no forms, no
+  // top-level navigation of our page, no downloads.
+  assert.match(iframe, /sandbox="allow-scripts allow-same-origin allow-popups"/);
+  assert.doesNotMatch(iframe, /allow-top-navigation|allow-forms|allow-downloads/);
+  assert.match(iframe, /referrerpolicy="no-referrer"/);
+});
+
 test('contact navigation and page initialization are configured', () => {
   const shell = fs.readFileSync(
     path.join(__dirname, '..', 'public', 'js', 'shell.js'),
