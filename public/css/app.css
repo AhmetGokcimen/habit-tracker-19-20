@@ -2968,5 +2968,117 @@ button.reaction:hover {
   }
 }
 
+/* Footer: professional SaaS layout */
+.site-footer {
+  margin-top: 64px;
+  padding: 48px 24px 24px;
+  border-top: 1px solid var(--line);
+  background: var(--card);
+  color: var(--ink);
+}
+
+.site-footer-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(0, 2fr);
+  gap: 48px;
+  max-width: 1120px;
+  margin: 0 auto;
+}
+
+/* Brand section */
+.footer-brand {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.footer-logo {
+  color: inherit;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  text-decoration: none;
+}
+
+.footer-brand p {
+  max-width: 300px;
+  margin: 0;
+  line-height: 1.7;
+  opacity: 0.7;
+}
+
+/* Footer navigation columns */
+.footer-links {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+
+.footer-links nav,
+.footer-legal {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.footer-links h3 {
+  margin: 0 0 8px;
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.footer-links a {
+  color: inherit;
+  font-size: 0.9rem;
+  text-decoration: none;
+  opacity: 0.7;
+  transition: opacity 180ms ease;
+}
+
+.footer-links a:hover {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+.footer-links a:focus-visible,
+.footer-logo:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+}
+
+.footer-legal p {
+  margin: 0;
+  font-size: 0.85rem;
+  line-height: 1.6;
+  opacity: 0.6;
+}
+
+/* Footer bottom copyright */
+.footer-bottom {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 24px;
+  border-top: 1px solid var(--line);
+}
+
+.footer-bottom p {
+  margin: 0;
+  font-size: 0.8rem;
+  opacity: 0.65;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .footer-links a {
+    transition: none;
+  }
+}
+
 
 
