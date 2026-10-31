@@ -3080,5 +3080,77 @@ button.reaction:hover {
   }
 }
 
+/* Footer: responsive layout for tablets and mobile */
+@media (max-width: 760px) {
+
+  .site-footer {
+    margin-top: 48px;
+    padding: 36px 20px 24px;
+  }
+
+  /* Stack brand and navigation vertically */
+  .site-footer-inner {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 28px;
+  }
+
+  /* Keep brand name on a single line */
+  .footer-brand {
+    gap: 12px;
+    min-width: 0;
+  }
+
+  .footer-logo {
+    white-space: nowrap;
+  }
+
+  .footer-brand p {
+    max-width: 360px;
+  }
+
+  /* Product and Company side by side */
+  .footer-links {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 28px 20px;
+  }
+
+  .footer-links nav,
+  .footer-legal {
+    min-width: 0;
+  }
+
+  /* Place Legal on a separate row */
+  .footer-legal {
+    grid-column: 1 / -1;
+  }
+
+  /* Copyright below all sections */
+  .footer-bottom {
+    grid-column: 1 / -1;
+    padding-top: 20px;
+  }
+}
+
+/* Footer: smaller phone screens */
+@media (max-width: 420px) {
+
+  .site-footer {
+    padding: 30px 18px 22px;
+  }
+
+  .footer-links {
+    gap: 24px 16px;
+  }
+
+  .footer-bottom {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+
 
 

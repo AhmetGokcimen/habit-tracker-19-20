@@ -54,3 +54,36 @@ test('footer provides product and contact navigation', () => {
   assert.match(footerCode, /aria-label': 'Footer product links'/);
   assert.match(footerCode, /aria-label': 'Footer company links'/);
 });
+
+test('footer supports responsive mobile layouts', () => {
+  const css = fs.readFileSync(
+    path.join(__dirname, '..', 'public', 'css', 'app.css'),
+    'utf8'
+  );
+
+  const mobileCss = css.slice(
+    css.indexOf('/* Footer: responsive layout for tablets and mobile */')
+  );
+
+  // Verify tablet and mobile breakpoints.
+  assert.match(mobileCss, /@media\s*\(max-width:\s*760px\)/);
+  assert.match(mobileCss, /@media\s*\(max-width:\s*420px\)/);
+
+  // Brand and navigation should stack vertically.
+  assert.match(
+    mobileCss,
+    /\.site-footer-inner\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/
+  );
+
+  // Product and Company should use two columns.
+  assert.match(
+    mobileCss,
+    /\.footer-links\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/
+  );
+
+  // Legal section should occupy its own row.
+  assert.match(
+    mobileCss,
+    /\.footer-legal\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/
+  );
+});
