@@ -25,15 +25,14 @@
   --topbar-bg: rgba(230, 239, 236, 0.82);
   --card-glass: rgba(251, 253, 252, 0.6);
   --row-hover: #f3f8f6;
-  --warm-tint: var(--warm-tint);
-  --warm-line: var(--warm-line);
-  --yellow-tint: var(--yellow-tint);
+  --warm-tint: #fff0e6;
+  --warm-line: #e8c4b2;
+  --yellow-tint: #fff5d6;
   --danger-tint: #fbe4e1;
   --danger-line: #e5b9b4;
-  --ice: var(--ice);
-  --ice-line: var(--ice-line);
-  --ice-ink: var(--ice-ink);
-
+  --ice: #e8f3f8;
+  --ice-line: #bddce8;
+  --ice-ink: #24596f;
   /* Type */
   --font-display: 'Bricolage Grotesque Variable', 'Segoe UI', system-ui, sans-serif;
   --font-body: 'Atkinson Hyperlegible', 'Segoe UI', system-ui, sans-serif;
