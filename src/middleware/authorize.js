@@ -63,7 +63,8 @@ const policies = {
     // Comments are read on public habits (owner/admin can still read them
     // after the habit is made private), and can only be written on public habits.
     listComments: (u, h) => owns(u, h) || isAdmin(u) || h.is_public === 1,
-    addComment: (u, h) => h.is_public === 1,
+    // Archived habits are read-only, so they take no new comments either.
+    addComment: (u, h) => h.is_public === 1 && h.archived_at === null,
     // "Add to my habits" from someone else's shared, active habit.
     copy: (u, h) => h.is_public === 1 && h.archived_at === null && !owns(u, h),
     // Cheering on someone else's shared, active habit.

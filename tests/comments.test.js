@@ -41,6 +41,22 @@ describe('F6 — comments on shared habits', () => {
     assert.equal(await countComments(), before);
   });
 
+  test('an archived public habit takes no new comments (403) until it is restored', async () => {
+    const habit = (await alice.post('/api/habits').send({ title: 'Stretch', category: 'fitness', is_public: true })).body.habit;
+    await comment(bob, habit.id, 'Nice one');
+    assert.equal((await alice.patch(`/api/habits/${habit.id}`).send({ archived: true })).status, 200);
+
+    const before = await countComments();
+    assert.equal((await bob.post(`/api/habits/${habit.id}/comments`).send({ body: 'still here?' })).status, 403);
+    assert.equal((await alice.post(`/api/habits/${habit.id}/comments`).send({ body: 'mine' })).status, 403);
+    assert.equal(await countComments(), before);
+    // Existing comments stay readable for the owner.
+    assert.equal((await alice.get(`/api/habits/${habit.id}/comments`)).body.comments.length, 1);
+
+    await alice.patch(`/api/habits/${habit.id}`).send({ archived: false });
+    assert.equal((await bob.post(`/api/habits/${habit.id}/comments`).send({ body: 'welcome back' })).status, 201);
+  });
+
   test('comment body is validated on the server like check-in notes', async () => {
     const url = `/api/habits/${publicHabit.id}/comments`;
     const bad = [
