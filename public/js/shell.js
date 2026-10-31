@@ -109,6 +109,77 @@ function renderTopbar(user, active) {
   );
 }
 
+function renderFooter() {
+  let footer = document.getElementById('site-footer');
+
+  if (!footer) {
+    footer = el('footer', {
+      class: 'site-footer',
+      attrs: { id: 'site-footer' },
+    });
+
+    document.body.append(footer);
+  }
+
+  footer.replaceChildren(
+    el(
+      'div',
+      { class: 'site-footer-inner' },
+
+      // Brand information
+      el(
+        'div',
+        { class: 'footer-brand' },
+        el('a', {
+          class: 'footer-logo',
+          text: 'Habit Tracker',
+          attrs: { href: '/' },
+        }),
+        el('p', {
+          text: 'Small marks, every day. Build better habits, one day at a time.',
+        }),
+      ),
+
+      // Footer navigation
+      el(
+        'div',
+        { class: 'footer-links' },
+
+        el(
+          'nav',
+          { attrs: { 'aria-label': 'Footer product links' } },
+          el('h3', { text: 'Product' }),
+          el('a', { text: 'Explore', attrs: { href: '/explore.html' } }),
+          el('a', { text: 'Pricing', attrs: { href: '/subscription.html' } }),
+          el('a', { text: 'Challenges', attrs: { href: '/challenges.html' } }),
+        ),
+
+        el(
+          'nav',
+          { attrs: { 'aria-label': 'Footer company links' } },
+          el('h3', { text: 'Company' }),
+          el('a', { text: 'Contact', attrs: { href: '/contact.html' } }),
+        ),
+
+        el(
+          'div',
+          { class: 'footer-legal' },
+          el('h3', { text: 'Legal' }),
+          el('p', { text: 'Legal pages coming soon.' }),
+        ),
+      ),
+
+      // Footer bottom
+      el(
+        'div',
+        { class: 'footer-bottom' },
+        el('p', { text: `© ${new Date().getFullYear()} Habit Tracker` }),
+        el('p', { text: 'Built for better habits.' }),
+      ),
+    ),
+  );
+}
+
 /** Loads the session (redirecting to login if there is none) and draws the shell. */
 export async function initPage({ active } = {}) {
   let user;
@@ -123,6 +194,7 @@ export async function initPage({ active } = {}) {
     throw err;
   }
   renderTopbar(user, active);
+  renderFooter();
   ensureToastRegion();
   enableTilt();
   // Loaded lazily: reminders.js imports this module.
