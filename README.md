@@ -4,7 +4,7 @@ A small web app for building habits. You add the habits you want to keep — eve
 
 It was built for the course's **19/20 security challenge**: an Express 5 JSON API with server-side authentication, record-level authorization and input validation on every request, a SQLite/libSQL database (local file, Turso in production) and a plain HTML/CSS/JavaScript frontend. How it defends itself is described in [SECURITY.md](SECURITY.md).
 
-**Live:** <contach.app>
+**Live:** <https://contach.app/login>
 
 ## Features
 
