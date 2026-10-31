@@ -25,12 +25,16 @@ test('contact page is served successfully', async () => {
 test('contact page contains email, phone and office sections', () => {
   assert.match(contactHtml, /<h3>Email Us<\/h3>/);
   assert.match(contactHtml, /<h3>Call Us<\/h3>/);
-  assert.match(contactHtml, /<h3>Office Location<\/h3>/);
+  assert.match(contactHtml, /<h3>Demo Location — Bucharest City Center<\/h3>/);
 
   // Unverified contact details must remain placeholders.
   assert.match(contactHtml, /Contact email to be confirmed/);
   assert.match(contactHtml, /Phone number to be confirmed/);
-  assert.match(contactHtml, /Office address to be confirmed/);
+  assert.match(contactHtml, /This is a demonstration location,\s*not an actual Habit Tracker office\./);
+
+  assert.match(
+  contactHtml,
+  /src="https:\/\/www\.openstreetmap\.org\/export\/embed\.html\?/);
 });
 
 test('contact navigation and page initialization are configured', () => {
