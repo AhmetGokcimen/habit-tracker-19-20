@@ -161,12 +161,24 @@ function renderFooter() {
           el('a', { text: 'Contact', attrs: { href: '/contact.html' } }),
         ),
 
+        
         el(
-          'div',
-          { class: 'footer-legal' },
+          'nav',
+          {
+            class: 'footer-legal',
+            attrs: { 'aria-label': 'Footer legal links' },
+          },
           el('h3', { text: 'Legal' }),
-          el('p', { text: 'Legal pages coming soon.' }),
+          el('a', {
+            text: 'Privacy Policy',
+            attrs: { href: '/privacy.html' },
+          }),
+          el('a', {
+            text: 'Terms of Use',
+            attrs: { href: '/terms.html' },
+          }),
         ),
+
       ),
 
       // Footer bottom

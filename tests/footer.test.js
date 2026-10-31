@@ -87,3 +87,38 @@ test('footer supports responsive mobile layouts', () => {
     /\.footer-legal\s*\{[^}]*grid-column:\s*1\s*\/\s*-1/
   );
 });
+
+test('footer includes accessible Privacy Policy and Terms of Use links', () => {
+  const footerCode = shell.slice(
+    shell.indexOf('function renderFooter()')
+  );
+
+  // Verify Legal navigation is accessible.
+  assert.match(
+    footerCode,
+    /'aria-label': 'Footer legal links'/
+  );
+
+  // Verify both legal pages are linked.
+  assert.match(footerCode, /href: '\/privacy\.html'/);
+  assert.match(footerCode, /href: '\/terms\.html'/);
+
+  // Verify placeholder text has been removed.
+  assert.doesNotMatch(
+    footerCode,
+    /Legal pages coming soon/
+  );
+});
+
+test('footer links use coral underline on hover', () => {
+  const css = fs.readFileSync(
+    path.join(__dirname, '..', 'public', 'css', 'app.css'),
+    'utf8'
+  );
+
+  // Check hover underline styling.
+  assert.match(
+    css,
+    /\.footer-links a:hover\s*\{[^}]*text-decoration-color:\s*#ff5e3a;/
+  );
+});
