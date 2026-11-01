@@ -98,6 +98,7 @@ const byLoginNameAndIp = (req) => {
 
 const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * MINUTE;
+const LIST_READS_LIMIT = 300;
 
 // ---- trusted login networks ---------------------------------------------------
 
@@ -177,6 +178,9 @@ const limiters = {
   // a brake for scripts.
   heavyReads: rateLimit({ name: 'heavy-reads', windowMs: 10 * MINUTE, limit: 300, key: byUser }),
   profileReads: rateLimit({ name: 'profile-reads', windowMs: 10 * MINUTE, limit: 120, key: byUser }),
+  // List endpoints (public search, own habits, challenge leaderboards), one
+  // shared budget per user (per IP when signed out).
+  listReads: rateLimit({ name: 'list-reads', windowMs: 10 * MINUTE, limit: LIST_READS_LIMIT, key: byUser }),
   // Data export reads everything a user has: keep it cheap to serve.
   exportData: rateLimit({ name: 'export', windowMs: 60 * MINUTE, limit: 10, key: byUser }),
   // Proof-photo uploads (multipart requests) per user, on top of `writes`.
@@ -187,5 +191,5 @@ const limiters = {
 
 module.exports = {
   rateLimit, limiters, isTrustedLoginIp, rememberLoginIp, pruneTrustedIps,
-  TRUSTED_IP_MAX_AGE_MS, MAX_TRUSTED_IPS_PER_USER,
+  TRUSTED_IP_MAX_AGE_MS, MAX_TRUSTED_IPS_PER_USER, LIST_READS_LIMIT,
 };

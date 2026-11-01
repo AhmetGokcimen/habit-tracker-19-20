@@ -10,6 +10,7 @@ const schemas = require('../validators/schemas');
 const { validate } = require('../middleware/validate');
 const { requireAuth } = require('../middleware/authenticate');
 const { authorize } = require('../middleware/authorize');
+const { limiters } = require('../middleware/rateLimit');
 const { moderationAudit } = require('../services/auditLog');
 const { badRequest, conflict } = require('../utils/httpError');
 const schedule = require('../services/schedule');
@@ -18,7 +19,6 @@ const { freezesByHabit, freezesLeft } = require('../services/freezes');
 const router = express.Router();
 router.use(requireAuth);
 
-const PAGE_SIZE = 20;
 // Per-user cap (active + archived) so creating or copying cannot be used to
 // flood the database. Checked inside the INSERT, so parallel requests cannot
 // exceed it.
@@ -54,8 +54,8 @@ function serializeHabit(row, viewer = null) {
 const escapeLike = (text) => text.replace(/[\\%_]/g, (ch) => `\\${ch}`);
 
 // F7: search public habits by text and/or category. Fully parameterized.
-router.get('/', validate({ query: schemas.habitSearch }), async (req, res) => {
-  const { q, category, frequency, goal_type, page, sort } = req.valid.query;
+router.get('/', limiters.listReads, validate({ query: schemas.habitSearch }), async (req, res) => {
+  const { q, category, frequency, goal_type, page, limit, sort } = req.valid.query;
   const pattern = q ? `%${escapeLike(q)}%` : null;
   // Define safe sorting options for public habit search.
   const sortOptions = {
@@ -80,20 +80,20 @@ router.get('/', validate({ query: schemas.habitSearch }), async (req, res) => {
 
       ORDER BY ${orderBy}
       LIMIT ?5 OFFSET ?6`,
-    [
-  category ?? null, pattern, frequency ?? null, goal_type ?? null, PAGE_SIZE + 1, (page - 1) * PAGE_SIZE,],
+    [category ?? null, pattern, frequency ?? null, goal_type ?? null, limit + 1, (page - 1) * limit],
   );
 
   res.json({
-    habits: rows.slice(0, PAGE_SIZE).map(serializeHabit),
+    habits: rows.slice(0, limit).map(serializeHabit),
     page,
-    has_more: rows.length > PAGE_SIZE,
+    limit,
+    has_more: rows.length > limit,
   });
 });
 
 // The caller's own habits (public and private), with private check-in stats
 // and streaks computed from the full history.
-router.get('/mine', validate({ query: schemas.mineQuery }), async (req, res) => {
+router.get('/mine', limiters.listReads, validate({ query: schemas.mineQuery }), async (req, res) => {
   const archived = req.valid.query.archived === '1';
   const [rows, dates, freezes, left] = await Promise.all([
     db.all(

@@ -110,14 +110,25 @@ const mineQuery = z.strictObject({
 
 // Query strings: repeated keys (?q=a&q=b) arrive as arrays and fail z.string().
 // Validate public habit search, category filters, sorting, and pagination.
+// Page sizes: values above the maximum are clamped to it (not rejected).
+const MAX_PAGE_SIZE = 50;
+const pageSize = (fallback) =>
+  z.coerce.number().int('Limit must be a whole number').min(1, 'Limit must be at least 1')
+    .default(fallback).transform((n) => Math.min(n, MAX_PAGE_SIZE));
+
 const habitSearch = z.strictObject({
-  q: z.string().trim().max(50, 'Search text must be at most 50 characters').optional(),
+  // Empty means "no text filter"; otherwise 2-50 characters.
+  q: z.string().trim().max(50, 'Search text must be at most 50 characters')
+    .refine((s) => s.length === 0 || s.length >= 2, 'Search text must be at least 2 characters').optional(),
   category: z.enum(CATEGORIES, 'Unknown category').optional(),
   frequency: z.enum(['daily', 'weekdays', 'weekly']).optional(),
   goal_type: z.enum(['simple', 'measurable']).optional(),
   page: z.coerce.number().int().min(1).max(1000).default(1),
+  limit: pageSize(20),
   sort: z.enum(['newest', 'oldest', 'popular', 'discussed']).default('newest'),
 });
+
+const leaderboardQuery = z.strictObject({ limit: pageSize(MAX_PAGE_SIZE) });
   
 
 // YYYY-MM-DD, a real calendar day, not before 2000 and not in the future
@@ -241,6 +252,8 @@ const roleUpdate = z.strictObject({
 
 module.exports = {
   CATEGORIES,
+  MAX_PAGE_SIZE,
+  leaderboardQuery,
   commentBody,
   passwordChange,
   roleUpdate,

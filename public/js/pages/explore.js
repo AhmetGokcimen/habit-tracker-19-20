@@ -14,6 +14,14 @@ const pager = $('#pager');
 const count = $('#result-count');
 const chips = $('#categories');
 
+// Search text the API accepts: trimmed, at most 50 characters, and either
+// empty or at least 2 characters. A single character counts as "no text
+// filter", so no search request fails and no error is shown for it.
+function searchText(raw) {
+  const text = String(raw ?? '').trim().slice(0, 50);
+  return text.length >= 2 ? text : '';
+}
+
 function readState() {
   const params = new URLSearchParams(location.search);
   const category = params.get('category');
@@ -22,7 +30,7 @@ function readState() {
   const sort = params.get('sort');
   const page = Number(params.get('page'));
   return {
-    q: (params.get('q') ?? '').slice(0, 50),
+    q: searchText(params.get('q')),
     category: CATEGORIES.includes(category) ? category : '',
     frequency: ['daily', 'weekdays', 'weekly'].includes(frequency) ? frequency : '',
     goal_type: ['simple', 'measurable'].includes(goalType) ? goalType : '',
@@ -205,7 +213,7 @@ goalTypeSelect.value = state.goal_type;
 goalTypeSelect.addEventListener('change', () => {
   state = {
     ...state,
-    q: form.q.value.trim().slice(0, 50),
+    q: searchText(form.q.value),
     goal_type: goalTypeSelect.value,
     page: 1,
   };
@@ -219,7 +227,7 @@ frequencySelect.value = state.frequency;
 frequencySelect.addEventListener('change', () => {
   state = {
     ...state,
-    q: form.q.value.trim().slice(0, 50),
+    q: searchText(form.q.value),
     frequency: frequencySelect.value,
     page: 1,
   };
@@ -233,7 +241,7 @@ sortSelect.value = state.sort;
 sortSelect.addEventListener('change', () => {
   state = {
     ...state,
-    q: form.q.value.trim().slice(0, 50),
+    q: searchText(form.q.value),
     sort: sortSelect.value,
     page: 1,
   };
@@ -243,7 +251,7 @@ sortSelect.addEventListener('change', () => {
 renderChips();
 form.addEventListener('submit', (event) => {
   event.preventDefault();
-  state = { ...state, q: form.q.value.trim().slice(0, 50), page: 1 };
+  state = { ...state, q: searchText(form.q.value), page: 1 };
   search();
 });
 
