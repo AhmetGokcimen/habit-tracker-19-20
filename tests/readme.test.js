@@ -17,6 +17,22 @@ test('README demo accounts are generated from seed-data.js (run npm run readme:a
   assert.equal(readme, renderInto(readme));
 });
 
+test('the README names no seed account', () => {
+  const readme = fs.readFileSync(README, 'utf8');
+  const start = readme.indexOf('<!-- seed-accounts:start');
+  const section = readme.slice(start, readme.indexOf('<!-- seed-accounts:end -->'));
+  const roles = new Set(SEED_ACCOUNTS.map((a) => a.role));
+  for (const { username } of SEED_ACCOUNTS) {
+    if (roles.has(username)) {
+      // A name that is also a role word ("admin") may appear as that word, but
+      // never written like a username in the account section (`admin`, | admin |).
+      assert.doesNotMatch(section, new RegExp(`\`${username}\`|\\|\\s*${username}\\s*\\|`, 'i'), username);
+    } else {
+      assert.doesNotMatch(readme, new RegExp(`\\b${username}\\b`, 'i'), username);
+    }
+  }
+});
+
 test('seed data has at least two accounts per role, all valid under the register rules', () => {
   for (const role of ['user', 'admin']) {
     assert.ok(SEED_ACCOUNTS.filter((a) => a.role === role).length >= 2, role);
