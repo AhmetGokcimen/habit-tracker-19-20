@@ -25,6 +25,21 @@ test('vercel.json gives CDN-served pages the same security headers as Express', 
   }
 });
 
+test('static files must be revalidated before every use; API responses keep no-store', async () => {
+  const app = createApp();
+  assert.equal(staticRule.headers.find((h) => h.key === 'Cache-Control')?.value, 'no-cache');
+  for (const file of ['/', '/login.html', '/js/pages/habit.js', '/css/app.css', '/favicon.svg']) {
+    const res = await request(app).get(file);
+    assert.equal(res.status, 200, file);
+    assert.equal(res.headers['cache-control'], 'no-cache', file);
+    assert.ok(res.headers.etag, `${file} has an ETag`);
+    // An unchanged file costs only a 304 on revalidation.
+    const again = await request(app).get(file).set('If-None-Match', res.headers.etag);
+    assert.equal(again.status, 304, file);
+  }
+  assert.equal((await request(app).get('/api/auth/me')).headers['cache-control'], 'no-store');
+});
+
 test('the static header rule does not apply to API routes', () => {
   const pattern = new RegExp(`^${staticRule.source}$`);
   assert.equal(pattern.test('/login.html'), true);

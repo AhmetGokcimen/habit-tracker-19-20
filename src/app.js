@@ -81,7 +81,18 @@ function createApp() {
 
   // Local static files. On Vercel, public/ is served by the CDN instead and
   // gets the same security headers from vercel.json.
-  app.use(express.static(config.publicDir, { extensions: ['html'], index: 'index.html' }));
+  // Cache-Control: no-cache — browsers may keep a copy but must revalidate it
+  // (ETag / Last-Modified, a cheap 304) before every use, so a new deploy's
+  // HTML, JS and CSS are picked up at once instead of mixing with old files.
+  // vercel.json sets the same header for the CDN (tests/headers.test.js).
+  app.use(
+    express.static(config.publicDir, {
+      extensions: ['html'],
+      index: 'index.html',
+      cacheControl: false,
+      setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+    }),
+  );
   app.use(notFoundHandler);
   app.use(errorHandler);
   return app;
