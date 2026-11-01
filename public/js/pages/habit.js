@@ -7,6 +7,7 @@ import { api, ApiError } from '../api.js';
 import { el, $, fill, idFromQuery, localISODate, addDays, formatDate, formatTimestamp } from '../dom.js';
 import { initPage, toast, errorMessage, confirmDialog, showFormErrors, clearFormErrors, withBusy } from '../shell.js';
 import { reveal } from '../motion.js';
+import { shrinkPhoto } from '../image.js';
 import { categoryChip, visibilityLabel, streakBadge, habitDialog, isDue, scheduleLabel, chainCalendar, reactionBar } from '../components.js';
 
 const MAX_PHOTO_BYTES = 1024 * 1024;
@@ -271,7 +272,7 @@ function checkinForm() {
     el(
       'div',
       { class: 'field', dataset: { field: 'photo' } },
-      el('label', { class: 'file-drop', attrs: { for: 'ci-photo' } }, el('span', { class: 'label', text: 'Proof photo (optional)' }), el('span', { class: 'hint', text: 'JPEG, PNG or WebP, up to 1 MB, for the last 7 days. Only you and admins can see it.' }), photo),
+      el('label', { class: 'file-drop', attrs: { for: 'ci-photo' } }, el('span', { class: 'label', text: 'Proof photo (optional)' }), el('span', { class: 'hint', text: 'JPEG, PNG or WebP, for the last 7 days. Large photos are resized before upload (1 MB at most). Only you and admins can see it.' }), photo),
     ),
     submit,
   );
@@ -282,13 +283,19 @@ function checkinForm() {
     if (!form.reportValidity()) return;
 
     // Convenience checks only — the server inspects the actual file bytes.
-    const file = photo.files[0];
-    if (file && (file.size > MAX_PHOTO_BYTES || !PHOTO_TYPES.includes(file.type))) {
-      showFormErrors(form, new ApiError(400, { error: 'Choose a JPEG, PNG or WebP image of 1 MB or less.' }));
+    const original = photo.files[0];
+    if (original && !PHOTO_TYPES.includes(original.type)) {
+      showFormErrors(form, new ApiError(400, { error: 'Choose a JPEG, PNG or WebP image.' }));
       return;
     }
     await withBusy(submit, async () => {
       try {
+        // Resized to 1280 px / JPEG 0.8 in the browser; kept as is if that is not smaller.
+        const file = original ? await shrinkPhoto(original) : null;
+        if (file && file.size > MAX_PHOTO_BYTES) {
+          showFormErrors(form, new ApiError(400, { error: 'This photo is still larger than 1 MB after resizing. Choose a smaller image.' }));
+          return;
+        }
         const url = `/api/habits/${habit.id}/checkins`;
         if (file) {
           // Multipart only when there is a photo (uploads have their own limit).
