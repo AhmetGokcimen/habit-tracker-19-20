@@ -34,6 +34,18 @@ CREATE TABLE IF NOT EXISTS rate_limit_windows (
   prev_hits    INTEGER NOT NULL DEFAULT 0
 );
 
+-- Networks an account signed in from successfully, as an HMAC of the client
+-- IP bucket (IPv4 address or IPv6 /64), never the address itself. Over the
+-- per-account daily failed-login limit, logins from these networks are still
+-- let through, so strangers cannot lock out the owner. At most 10 per user,
+-- kept for 30 days after last use (src/middleware/rateLimit.js).
+CREATE TABLE IF NOT EXISTS login_trusted_ips (
+  user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ip_hash   TEXT    NOT NULL CHECK (length(ip_hash) = 64),
+  last_used INTEGER NOT NULL,
+  PRIMARY KEY (user_id, ip_hash)
+);
+
 CREATE TABLE IF NOT EXISTS habits (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,

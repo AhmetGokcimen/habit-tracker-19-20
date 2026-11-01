@@ -6,8 +6,11 @@
 const { test, describe, beforeEach, mock } = require('node:test');
 const assert = require('node:assert/strict');
 const { request, createApp, db, createUser, wrap, PASSWORD } = require('./helpers');
-const { rateLimit, limiters } = require('../src/middleware/rateLimit');
+const {
+  rateLimit, limiters, isTrustedLoginIp, rememberLoginIp, pruneTrustedIps, TRUSTED_IP_MAX_AGE_MS,
+} = require('../src/middleware/rateLimit');
 const { clientIp } = require('../src/utils/clientIp');
+const { resetLoginLocks } = require('../scripts/reset-login-lock');
 
 const app = createApp();
 const login = (username, password, headers = {}) => {
@@ -31,7 +34,10 @@ async function hitLimiter(limiter, { ip = '203.0.113.1', username } = {}) {
   return passed ? 'pass' : res.statusCode;
 }
 
-beforeEach(() => db.run('DELETE FROM rate_limit_windows'));
+beforeEach(async () => {
+  await db.run('DELETE FROM rate_limit_windows');
+  await db.run('DELETE FROM login_trusted_ips');
+});
 
 describe('spoofed forwarding headers cannot rotate the client IP', () => {
   test('failed logins are limited per IP even when X-Forwarded-For / X-Real-IP change on every request', async () => {
@@ -136,6 +142,175 @@ describe('sliding window', () => {
     // Once a full window has passed, the budget is back.
     now.mock.mockImplementation(() => base + 3 * windowMs + 1000);
     assert.equal(await hitLimiter(limiter), 'pass');
+  });
+});
+
+// ---- H-1: a lockout by strangers must not lock out the owner -------------------
+
+const DAY = 24 * 60 * 60 * 1000;
+const trustedRows = (userId) => db.all('SELECT ip_hash, last_used FROM login_trusted_ips WHERE user_id = ?', [userId]);
+// Fills the per-account daily budget from 51 addresses the owner never used.
+async function exhaustDaily(username) {
+  const results = [];
+  for (let i = 0; i < 51; i++) results.push(await hitLimiter(limiters.loginAccountDaily, { ip: `192.0.2.${i}`, username }));
+  return results;
+}
+// Collects console.error lines during a test.
+function captureErrors(t) {
+  const logged = [];
+  const spy = mock.method(console, 'error', (...args) => { logged.push(args.map(String).join(' ')); });
+  t.after(() => spy.mock.restore());
+  return logged;
+}
+const IDENTIFYING = /127\.0\.0\.1|::ffff|192\.0\.2\.|[0-9a-f]{64}/;
+
+describe('a lockout by strangers does not lock out the owner', () => {
+  test('requests refused by the account limiter do not increase its counter', async (t) => {
+    const midday = Math.floor(Date.now() / DAY) * DAY + DAY / 2;
+    const now = mock.method(Date, 'now', () => midday);
+    t.after(() => now.mock.restore());
+    for (let i = 0; i < 50; i++) {
+      assert.equal(await hitLimiter(limiters.loginAccountDaily, { ip: `192.0.2.${i}`, username: 'countme' }), 'pass');
+    }
+    for (let i = 0; i < 5; i++) {
+      assert.equal(await hitLimiter(limiters.loginAccountDaily, { ip: `198.51.100.${i}`, username: 'countme' }), 429);
+    }
+    const row = await db.get("SELECT hits FROM rate_limit_windows WHERE bucket = 'login-acct-day:countme'");
+    assert.equal(row.hits, 50);
+  });
+
+  test('other limiters keep counting refused requests (refund is opt-in)', async (t) => {
+    const windowMs = 60_000;
+    const base = Math.ceil(Date.now() / windowMs) * windowMs + 10 * windowMs;
+    const now = mock.method(Date, 'now', () => base + windowMs / 2);
+    t.after(() => now.mock.restore());
+    const limiter = rateLimit({ name: 'test-default', windowMs, limit: 2, key: () => 'k' });
+    for (let i = 0; i < 2; i++) assert.equal(await hitLimiter(limiter), 'pass');
+    for (let i = 0; i < 3; i++) assert.equal(await hitLimiter(limiter), 429);
+    const row = await db.get("SELECT hits FROM rate_limit_windows WHERE bucket = 'test-default:k'");
+    assert.equal(row.hits, 5);
+  });
+
+  test('after 51 failed logins, the right password works from a network that signed in before', async () => {
+    await createUser('known_net');
+    assert.equal((await login('known_net', PASSWORD)).status, 200);
+    const results = await exhaustDaily('known_net');
+    assert.equal(results.at(-1), 429);
+    assert.equal((await login('known_net', PASSWORD)).status, 200);
+  });
+
+  test('from a network that never signed in, the right password is still refused', async () => {
+    await createUser('new_net');
+    await exhaustDaily('new_net');
+    assert.equal((await login('new_net', PASSWORD)).status, 429);
+  });
+
+  test('from a trusted network, wrong passwords still hit the per-account-per-IP limit', async () => {
+    await createUser('trusted_wrong');
+    assert.equal((await login('trusted_wrong', PASSWORD)).status, 200);
+    await exhaustDaily('trusted_wrong');
+    for (let i = 0; i < 5; i++) assert.equal((await login('trusted_wrong', `guess-${i}x`)).status, 401);
+    assert.equal((await login('trusted_wrong', 'guess-6x')).status, 429);
+    assert.equal((await login('trusted_wrong', PASSWORD)).status, 429);
+  });
+
+  test('a network becomes trusted only after a successful login with the right password, stored as an HMAC', async () => {
+    const id = await createUser('only_ok');
+    assert.equal((await login('only_ok', 'wrong-pass-1')).status, 401);
+    assert.equal((await trustedRows(id)).length, 0);
+
+    // A right password refused by a limiter does not count either.
+    const blockedId = await createUser('blocked_ok');
+    for (let i = 0; i < 5; i++) await login('blocked_ok', `guess-${i}x`);
+    assert.equal((await login('blocked_ok', PASSWORD)).status, 429);
+    assert.equal((await trustedRows(blockedId)).length, 0);
+
+    assert.equal((await login('only_ok', PASSWORD)).status, 200);
+    const rows = await trustedRows(id);
+    assert.equal(rows.length, 1);
+    assert.match(rows[0].ip_hash, /^[0-9a-f]{64}$/);
+    assert.doesNotMatch(rows[0].ip_hash, /127\.0\.0\.1/);
+  });
+
+  test('an entry older than 30 days gives no exemption and is pruned', async () => {
+    const id = await createUser('stale_net');
+    const realNow = Date.now;
+    const longAgo = mock.method(Date, 'now', () => realNow() - TRUSTED_IP_MAX_AGE_MS - DAY);
+    assert.equal((await login('stale_net', PASSWORD)).status, 200);
+    longAgo.mock.restore();
+    assert.equal((await trustedRows(id)).length, 1);
+
+    await exhaustDaily('stale_net');
+    assert.equal((await login('stale_net', PASSWORD)).status, 429);
+    await pruneTrustedIps();
+    assert.equal((await trustedRows(id)).length, 0);
+  });
+
+  test('a user keeps at most 10 trusted networks; a new one replaces the oldest', async (t) => {
+    const id = await createUser('many_nets');
+    let clock = Date.now();
+    const now = mock.method(Date, 'now', () => clock);
+    t.after(() => now.mock.restore());
+    const fakeReq = (i) => ({ headers: {}, socket: { remoteAddress: `203.0.113.${i}` }, body: { username: 'many_nets' } });
+    for (let i = 1; i <= 12; i++) {
+      clock += 1000;
+      await rememberLoginIp(id, fakeReq(i));
+    }
+    assert.equal((await trustedRows(id)).length, 10);
+    assert.equal(await isTrustedLoginIp(fakeReq(1)), false);
+    assert.equal(await isTrustedLoginIp(fakeReq(2)), false);
+    assert.equal(await isTrustedLoginIp(fakeReq(3)), true);
+    assert.equal(await isTrustedLoginIp(fakeReq(12)), true);
+  });
+
+  test('if recording the trusted network fails, a correct login still succeeds and nothing identifying is logged', async (t) => {
+    await createUser('rec_fail');
+    await db.run(
+      "CREATE TRIGGER test_fail_trusted BEFORE INSERT ON login_trusted_ips BEGIN SELECT RAISE(ABORT, 'forced failure'); END",
+    );
+    t.after(() => db.run('DROP TRIGGER IF EXISTS test_fail_trusted'));
+    const logged = captureErrors(t);
+
+    assert.equal((await login('rec_fail', PASSWORD)).status, 200);
+    assert.equal(logged.length, 1);
+    assert.doesNotMatch(logged[0], IDENTIFYING);
+  });
+
+  test('if the trusted-network table fails, the request stays limited (429), pruning cannot fail it, and only error codes are logged', async (t) => {
+    await createUser('check_fail');
+    assert.equal((await login('check_fail', PASSWORD)).status, 200);
+    await exhaustDaily('check_fail');
+    await db.run('ALTER TABLE login_trusted_ips RENAME TO login_trusted_ips_hidden');
+    t.after(() => db.run('ALTER TABLE login_trusted_ips_hidden RENAME TO login_trusted_ips'));
+    // Run the occasional pruning on every limiter call, so its failure path is
+    // exercised deterministically instead of 1% of the time.
+    const random = mock.method(Math, 'random', () => 0);
+    t.after(() => random.mock.restore());
+    const logged = captureErrors(t);
+
+    assert.equal((await login('check_fail', PASSWORD)).status, 429);
+    assert.ok(logged.some((line) => line.startsWith('Could not check trusted login network:')));
+    assert.ok(logged.some((line) => line.startsWith('Could not prune trusted login networks:')));
+    for (const line of logged) assert.doesNotMatch(line, IDENTIFYING);
+  });
+
+  test('the unlock script clears one account, audits it as "cli", and rejects bad input', async () => {
+    const adminId = await createUser('locked_admin', 'admin');
+    await exhaustDaily('locked_admin');
+    await exhaustDaily('other_acct');
+    assert.equal(await hitLimiter(limiters.loginAccountDaily, { username: 'locked_admin' }), 429);
+
+    const result = await resetLoginLocks('Locked_Admin');
+    assert.equal(result.userId, adminId);
+    assert.ok(result.removed >= 1);
+    assert.equal(await hitLimiter(limiters.loginAccountDaily, { username: 'locked_admin' }), 'pass');
+    assert.equal(await hitLimiter(limiters.loginAccountDaily, { username: 'other_acct' }), 429);
+
+    const entry = await db.get("SELECT * FROM admin_audit_log WHERE action = 'login.unlock' ORDER BY id DESC LIMIT 1");
+    assert.equal(entry.actor_username, 'cli');
+    assert.equal(entry.actor_id, 0);
+    assert.equal(entry.target_id, adminId);
+    await assert.rejects(resetLoginLocks("x' OR 1=1 --"), /valid username/);
   });
 });
 

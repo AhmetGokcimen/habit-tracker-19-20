@@ -14,6 +14,8 @@
 // increments the counter and returns both counts, so concurrent requests
 // cannot race past the limit.
 
+const crypto = require('node:crypto');
+const config = require('../config');
 const db = require('../db');
 const { clientIp } = require('../utils/clientIp');
 
@@ -36,6 +38,10 @@ const STALE_AFTER_MS = 2 * 24 * 60 * 60 * 1000;
 async function pruneOccasionally(now) {
   if (Math.random() < 0.01) {
     await db.run('DELETE FROM rate_limit_windows WHERE window_start < ?', [now - STALE_AFTER_MS]);
+    // Best effort: failing to prune must not fail the request being limited.
+    await pruneTrustedIps(now).catch((err) => {
+      console.error('Could not prune trusted login networks:', err.code || err.name);
+    });
   }
 }
 
@@ -46,8 +52,10 @@ async function pruneOccasionally(now) {
  * @param {number} opts.limit            max requests per sliding window
  * @param {(req) => string|null} opts.key  per-client key; null skips limiting
  * @param {boolean} [opts.skipSuccessfulRequests]  refund the hit if the response is < 400
+ * @param {(req) => Promise<boolean>} [opts.allowWhenLimited]  over the limit, still let this request through
+ * @param {boolean} [opts.refundRefused]  a refused (429) request does not count
  */
-function rateLimit({ name, windowMs, limit, key, skipSuccessfulRequests = false }) {
+function rateLimit({ name, windowMs, limit, key, skipSuccessfulRequests = false, allowWhenLimited, refundRefused = false }) {
   return async (req, res, next) => {
     const clientKey = key(req);
     if (clientKey === null) return next();
@@ -62,7 +70,10 @@ function rateLimit({ name, windowMs, limit, key, skipSuccessfulRequests = false 
     const effective = prevHits * prevWeight + hits;
 
     res.set('RateLimit-Policy', `${limit};w=${Math.round(windowMs / 1000)}`);
-    if (effective > limit) {
+    if (effective > limit && !(allowWhenLimited && (await allowWhenLimited(req)))) {
+      // Opt-in: a refused request does not count, so repeating requests against
+      // a full bucket cannot keep it full; it drains as the window slides.
+      if (refundRefused) await db.run(REFUND_SQL, [bucket, windowStart]);
       res.set('Retry-After', String(Math.ceil((windowStart + windowMs - now) / 1000)));
       return res.status(429).json({ error: 'Too many attempts, please try again later' });
     }
@@ -88,6 +99,61 @@ const byLoginNameAndIp = (req) => {
 const MINUTE = 60 * 1000;
 const DAY = 24 * 60 * MINUTE;
 
+// ---- trusted login networks ---------------------------------------------------
+
+const TRUSTED_IP_MAX_AGE_MS = 30 * DAY;
+const MAX_TRUSTED_IPS_PER_USER = 10;
+
+// A key used only for this purpose, derived from JWT_SECRET (HKDF), so the
+// stored hashes cannot be matched against anything else. Rotating JWT_SECRET
+// simply drops every exemption, which fails safe.
+const TRUSTED_IP_KEY = Buffer.from(
+  crypto.hkdfSync('sha256', config.jwtSecret, '', 'habit-tracker/login-trusted-ip/v1', 32),
+);
+// HMAC of the same bucket the limiters use (IPv4 address or IPv6 /64).
+const ipHash = (req) => crypto.createHmac('sha256', TRUSTED_IP_KEY).update(byIp(req)).digest('hex');
+
+// True if this network signed in to the named account successfully in the
+// last 30 days. Any error means "not trusted": the request stays limited.
+async function isTrustedLoginIp(req) {
+  const name = loginName(req);
+  if (name === null) return false;
+  try {
+    const row = await db.get(
+      `SELECT 1 FROM login_trusted_ips t JOIN users u ON u.id = t.user_id
+        WHERE u.username = ? AND t.ip_hash = ? AND t.last_used > ?`,
+      [name, ipHash(req), Date.now() - TRUSTED_IP_MAX_AGE_MS],
+    );
+    return Boolean(row);
+  } catch (err) {
+    console.error('Could not check trusted login network:', err.code || err.name);
+    return false;
+  }
+}
+
+// Called only after a correct password. One atomic batch: drop this user's
+// expired entries, add or refresh this network, keep only the 10 most recent.
+function rememberLoginIp(userId, req) {
+  const now = Date.now();
+  return db.batch([
+    ['DELETE FROM login_trusted_ips WHERE user_id = ? AND last_used <= ?', [userId, now - TRUSTED_IP_MAX_AGE_MS]],
+    [
+      `INSERT INTO login_trusted_ips (user_id, ip_hash, last_used) VALUES (?, ?, ?)
+       ON CONFLICT (user_id, ip_hash) DO UPDATE SET last_used = excluded.last_used`,
+      [userId, ipHash(req), now],
+    ],
+    [
+      `DELETE FROM login_trusted_ips WHERE user_id = ?1 AND rowid NOT IN
+         (SELECT rowid FROM login_trusted_ips WHERE user_id = ?1 ORDER BY last_used DESC, rowid DESC LIMIT ?2)`,
+      [userId, MAX_TRUSTED_IPS_PER_USER],
+    ],
+  ]);
+}
+
+function pruneTrustedIps(now = Date.now()) {
+  return db.run('DELETE FROM login_trusted_ips WHERE last_used <= ?', [now - TRUSTED_IP_MAX_AGE_MS]);
+}
+
 const limiters = {
   // Every login attempt, successful or not, per IP: a script with a valid
   // password cannot mint sessions without limit.
@@ -97,7 +163,12 @@ const limiters = {
   // Failed logins per account from one IP (focused guessing).
   loginAccountIp: rateLimit({ name: 'login-acct-ip', windowMs: 15 * MINUTE, limit: 5, key: byLoginNameAndIp, skipSuccessfulRequests: true }),
   // Failed logins per account from all IPs together (distributed guessing).
-  loginAccountDaily: rateLimit({ name: 'login-acct-day', windowMs: DAY, limit: 50, key: loginName, skipSuccessfulRequests: true }),
+  // Networks the owner signed in from before are exempt, so this cap cannot be
+  // used to lock the owner out; the per-account-per-IP cap above still applies.
+  loginAccountDaily: rateLimit({
+    name: 'login-acct-day', windowMs: DAY, limit: 50, key: loginName,
+    skipSuccessfulRequests: true, allowWhenLimited: isTrustedLoginIp, refundRefused: true,
+  }),
   register: rateLimit({ name: 'register', windowMs: 60 * MINUTE, limit: 20, key: byIp }),
   // A stolen session must not become a way to brute-force the current password.
   passwordChange: rateLimit({ name: 'pw-change', windowMs: 15 * MINUTE, limit: 5, key: byUser, skipSuccessfulRequests: true }),
@@ -112,4 +183,7 @@ const limiters = {
   writes: rateLimit({ name: 'writes', windowMs: 10 * MINUTE, limit: 200, key: byUser }),
 };
 
-module.exports = { rateLimit, limiters };
+module.exports = {
+  rateLimit, limiters, isTrustedLoginIp, rememberLoginIp, pruneTrustedIps,
+  TRUSTED_IP_MAX_AGE_MS, MAX_TRUSTED_IPS_PER_USER,
+};

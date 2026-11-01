@@ -13,6 +13,7 @@
     "setup": "node scripts/setup.js",
     "seed": "node scripts/seed.js",
     "readme:accounts": "node scripts/update-readme.js",
+    "unlock": "node scripts/reset-login-lock.js",
     "test": "node --test \"tests/**/*.test.js\""
   },
   "dependencies": {
