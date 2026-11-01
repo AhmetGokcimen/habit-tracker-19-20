@@ -7,8 +7,7 @@
 // Small limits so the tests stay fast; read by config on load. The global cap
 // is large here, and its own test sets the counter directly instead of
 // filling it, so the tests do not depend on each other's uploads.
-process.env.PHOTO_QUOTA_MB = '1';
-process.env.PHOTO_TOTAL_CAP_MB = '100';
+require('./env').testEnv({ PHOTO_QUOTA_MB: '1', PHOTO_TOTAL_CAP_MB: '100' });
 
 const { test, describe, mock } = require('node:test');
 const assert = require('node:assert/strict');

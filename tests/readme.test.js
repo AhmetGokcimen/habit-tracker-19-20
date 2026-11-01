@@ -4,6 +4,9 @@
 // so the accounts are only ever maintained in one place — and no password may
 // ever appear in either.
 
+// Test environment first: scripts/seed loads config, which needs JWT_SECRET.
+require('./helpers');
+
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');

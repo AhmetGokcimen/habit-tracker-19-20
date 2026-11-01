@@ -2,12 +2,9 @@
 
 // Defaults that apply when the environment does not set a value.
 
-// Set to '' before config is loaded: dotenv never overrides a variable that is
-// already set (so a developer's own .env cannot change the result), and config
-// treats '' as "not set".
-process.env.PHOTO_QUOTA_MB = '';
-process.env.PHOTO_TOTAL_CAP_MB = '';
-process.env.REGISTER_DAILY_LIMIT = '';
+// '' means "not set" to config, and dotenv does not override it either, so the
+// built-in defaults are what is tested, whatever a developer's .env says.
+require('./env').testEnv({ PHOTO_QUOTA_MB: '', PHOTO_TOTAL_CAP_MB: '', REGISTER_DAILY_LIMIT: '' });
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
