@@ -328,6 +328,40 @@ describe('a lockout by strangers does not lock out the owner', () => {
   });
 });
 
+describe('accounts created per IP per day', () => {
+  const register = (i, body = {}) =>
+    wrap(request(app)).post('/api/auth/register').send({ username: `daily_${i}`, email: `daily_${i}@example.test`, password: 'Secret123x', ...body });
+
+  test('at most 5 new accounts per IP per day; the 6th gets 429 with its own message', async () => {
+    for (let i = 0; i < 5; i++) assert.equal((await register(i)).status, 201);
+    const refused = await register(5);
+    assert.equal(refused.status, 429);
+    assert.equal(refused.body.code, 'register_daily_limit');
+    assert.match(refused.body.error, /last 24 hours/);
+    assert.ok(Number(refused.headers['retry-after']) > 0);
+    assert.equal(await db.get("SELECT 1 FROM users WHERE username = 'daily_5'"), undefined);
+  });
+
+  test('failed and refused registrations do not use up the daily allowance', async () => {
+    await createUser('daily_taken');
+    assert.equal((await register('x', { password: 'short' })).status, 400);
+    assert.equal((await register('x', { username: 'daily_taken' })).status, 409);
+    for (let i = 10; i < 15; i++) assert.equal((await register(i)).status, 201);
+    assert.equal((await register(15)).status, 429);
+    assert.equal((await register(16)).status, 429);
+    const row = await db.get("SELECT hits FROM rate_limit_windows WHERE bucket LIKE 'register-day:%'");
+    assert.equal(row.hits, 5);
+  });
+
+  test('the allowance is per IP', async () => {
+    for (let i = 0; i < 5; i++) {
+      assert.equal(await hitLimiter(limiters.registerDaily, { ip: '198.51.100.7' }), 'pass');
+    }
+    assert.equal(await hitLimiter(limiters.registerDaily, { ip: '198.51.100.7' }), 429);
+    assert.equal(await hitLimiter(limiters.registerDaily, { ip: '198.51.100.8' }), 'pass');
+  });
+});
+
 describe('registration does not reveal which emails have accounts', () => {
   test('an email that is already in use registers normally; only a taken username is reported', async () => {
     await createUser('existing_user'); // email existing_user@example.test

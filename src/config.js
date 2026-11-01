@@ -61,6 +61,8 @@ module.exports = Object.freeze({
   database: Object.freeze(databaseConfig()),
   publicDir: path.join(ROOT, 'public'),
   maxUploadBytes: 1024 * 1024,
+  // Accounts that may be created from one IP (IPv6: /64) per day.
+  registerDailyLimit: intFromEnv('REGISTER_DAILY_LIMIT', 5, 1, 1000),
   // Total proof-photo bytes one user may store (all check-ins together).
   photoQuotaBytes: intFromEnv('PHOTO_QUOTA_MB', 25, 1, 1024) * 1024 * 1024,
   // Total proof-photo bytes of ALL users together; new photos are refused above it.

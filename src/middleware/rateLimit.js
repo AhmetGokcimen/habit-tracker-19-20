@@ -52,10 +52,15 @@ async function pruneOccasionally(now) {
  * @param {number} opts.limit            max requests per sliding window
  * @param {(req) => string|null} opts.key  per-client key; null skips limiting
  * @param {boolean} [opts.skipSuccessfulRequests]  refund the hit if the response is < 400
+ * @param {boolean} [opts.skipFailedRequests]  refund the hit if the response is >= 400 (count successes only)
  * @param {(req) => Promise<boolean>} [opts.allowWhenLimited]  over the limit, still let this request through
  * @param {boolean} [opts.refundRefused]  a refused (429) request does not count
+ * @param {{ error: string, code: string }} [opts.refusal]  a specific 429 body instead of the generic one
  */
-function rateLimit({ name, windowMs, limit, key, skipSuccessfulRequests = false, allowWhenLimited, refundRefused = false }) {
+function rateLimit({
+  name, windowMs, limit, key, skipSuccessfulRequests = false, skipFailedRequests = false, allowWhenLimited, refundRefused = false,
+  refusal = { error: 'Too many attempts, please try again later' },
+}) {
   return async (req, res, next) => {
     const clientKey = key(req);
     if (clientKey === null) return next();
@@ -75,12 +80,13 @@ function rateLimit({ name, windowMs, limit, key, skipSuccessfulRequests = false,
       // a full bucket cannot keep it full; it drains as the window slides.
       if (refundRefused) await db.run(REFUND_SQL, [bucket, windowStart]);
       res.set('Retry-After', String(Math.ceil((windowStart + windowMs - now) / 1000)));
-      return res.status(429).json({ error: 'Too many attempts, please try again later' });
+      return res.status(429).json(refusal);
     }
 
-    if (skipSuccessfulRequests) {
+    if (skipSuccessfulRequests || skipFailedRequests) {
       res.on('finish', () => {
-        if (res.statusCode < 400) db.run(REFUND_SQL, [bucket, windowStart]).catch(() => {});
+        const failed = res.statusCode >= 400;
+        if (failed ? skipFailedRequests : skipSuccessfulRequests) db.run(REFUND_SQL, [bucket, windowStart]).catch(() => {});
       });
     }
     next();
@@ -175,7 +181,18 @@ const limiters = {
     name: 'login-acct-day', windowMs: DAY, limit: 50, key: loginName,
     skipSuccessfulRequests: true, allowWhenLimited: isTrustedLoginIp, refundRefused: true,
   }),
+  // Every registration attempt per IP (scripts hammering the endpoint).
   register: rateLimit({ name: 'register', windowMs: 60 * MINUTE, limit: 20, key: byIp }),
+  // Accounts actually CREATED per IP per day (mass sign-ups, e.g. to fill the
+  // photo storage). Typos and taken usernames do not use up the allowance.
+  registerDaily: rateLimit({
+    name: 'register-day', windowMs: DAY, limit: config.registerDailyLimit, key: byIp,
+    skipFailedRequests: true, refundRefused: true,
+    refusal: {
+      error: 'Too many accounts were created from this network in the last 24 hours. Please try again later.',
+      code: 'register_daily_limit',
+    },
+  }),
   // A stolen session must not become a way to brute-force the current password.
   passwordChange: rateLimit({ name: 'pw-change', windowMs: 15 * MINUTE, limit: 5, key: byUser, skipSuccessfulRequests: true }),
   // Reads that compute over a whole history (stats, year calendars) or that

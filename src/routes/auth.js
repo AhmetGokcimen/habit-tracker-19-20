@@ -28,7 +28,7 @@ async function startSession(res, user) {
 
 const publicUser = (u) => ({ id: u.id, username: u.username, role: u.role });
 
-router.post('/register', limiters.register, validate({ body: schemas.register }), async (req, res) => {
+router.post('/register', limiters.register, limiters.registerDaily, validate({ body: schemas.register }), async (req, res) => {
   const { username, email, password } = req.valid.body;
   // Only the username is checked: usernames are public anyway, while emails are
   // private and must not be confirmable through this endpoint.
