@@ -10,7 +10,7 @@
 process.env.PHOTO_QUOTA_MB = '1';
 process.env.PHOTO_TOTAL_CAP_MB = '100';
 
-const { test, describe } = require('node:test');
+const { test, describe, mock } = require('node:test');
 const assert = require('node:assert/strict');
 const { createApp, db, createUser, loginAs } = require('./helpers');
 
@@ -139,6 +139,41 @@ describe('photos only for recent days', () => {
     assert.equal((await u.agent.patch(`/api/checkins/${c.id}`).send({ checkin_date: daysAgo(9) })).status, 400);
     assert.equal((await u.agent.patch(`/api/checkins/${c.id}`).send({ checkin_date: daysAgo(3) })).status, 200);
     assert.equal((await u.agent.patch(`/api/checkins/${c.id}`).send({ note: 'edited' })).status, 200);
+  });
+
+  test('an old check-in with a photo can keep its date or move later, but not earlier', async () => {
+    const u = await setup('old_move');
+    const c = (await u.upload(daysAgo(0), 1)).body.checkin;
+    // An older photo check-in (e.g. from before the window existed).
+    await db.run('UPDATE checkins SET checkin_date = ? WHERE id = ?', [daysAgo(20), c.id]);
+    const patch = (body) => u.agent.patch(`/api/checkins/${c.id}`).send(body);
+
+    const earlier = await patch({ checkin_date: daysAgo(25) });
+    assert.equal(earlier.status, 400);
+    assert.match(earlier.body.error, /earlier date outside the last 7 days/);
+    assert.ok(earlier.body.error.includes(daysAgo(20)));
+
+    assert.equal((await patch({ checkin_date: daysAgo(20) })).status, 200); // same date
+    assert.equal((await patch({ checkin_date: daysAgo(15) })).status, 200); // later, still old
+    assert.equal((await patch({ checkin_date: daysAgo(2) })).status, 200); // into the window
+    assert.equal((await db.get('SELECT checkin_date FROM checkins WHERE id = ?', [c.id])).checkin_date, daysAgo(2));
+  });
+});
+
+describe('a check-in deleted while its photo is being replaced', () => {
+  test('gets 404, not a server error', async (t) => {
+    const u = await setup('gone_during_put');
+    const c = (await u.upload(daysAgo(0), 1)).body.checkin;
+    // Simulate a parallel DELETE landing between authorisation and the UPDATE.
+    const run = db.run;
+    const spy = mock.method(db, 'run', async (sql, args) => {
+      if (sql.startsWith('UPDATE checkins SET photo_data = ?1')) await run('DELETE FROM checkins WHERE id = ?', [c.id]);
+      return run(sql, args);
+    });
+    t.after(() => spy.mock.restore());
+    const res = await u.replace(c.id, 1);
+    assert.equal(res.status, 404);
+    assert.match(res.body.error, /no longer exists/);
   });
 });
 

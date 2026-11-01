@@ -57,6 +57,11 @@ const uploadLimit = (req, res, next) => (req.is('multipart/form-data') ? limiter
 
 const MB = 1024 * 1024;
 const photoTooOld = () => badRequest(`Proof photos can be added only for the last ${PHOTO_MAX_AGE_DAYS} days`);
+const photoMoveTooOld = (current) =>
+  badRequest(
+    `This check-in has a proof photo, so it cannot be moved to an earlier date outside the last ${PHOTO_MAX_AGE_DAYS} days. ` +
+      `Choose ${current} or a later date, or remove the photo first.`,
+  );
 const photoQuotaFull = () =>
   conflict(`Your photo storage is full (${config.photoQuotaBytes / MB} MB). Remove an old proof photo first.`);
 // 507 Insufficient Storage: the service-wide cap, not something the user did.
@@ -75,6 +80,7 @@ const PHOTO_FITS_ON_REPLACE = `
   AND (SELECT bytes FROM photo_storage WHERE id = 1) - COALESCE(length(photo_data), 0) + length(?1) <= ?6`;
 
 // After a refused write: which limit was it? (Only used for the message.)
+// A check-in deleted in the meantime (parallel request) is reported as 404.
 async function photoRefusal(size, replacingCheckinId = null) {
   const [{ bytes } = {}, current] = await Promise.all([
     db.get('SELECT bytes FROM photo_storage WHERE id = 1'),
@@ -82,6 +88,7 @@ async function photoRefusal(size, replacingCheckinId = null) {
       ? { n: 0 }
       : db.get('SELECT COALESCE(length(photo_data), 0) AS n FROM checkins WHERE id = ?', [replacingCheckinId]),
   ]);
+  if (!current) return notFound('This check-in no longer exists');
   return bytes !== undefined && bytes - current.n + size <= config.photoTotalCapBytes ? photoQuotaFull() : photoStorageFull();
 }
 
@@ -194,8 +201,12 @@ checkins.get('/:id', authorize('checkin', 'read'), async (req, res) => {
 
 checkins.patch('/:id', authorize('checkin', 'update'), validate({ body: schemas.checkinUpdate }), async (req, res) => {
   const updates = req.valid.body;
-  // A check-in with a photo cannot be moved outside the photo window.
-  if (updates.checkin_date && req.resource.photo_mime && !photoAllowedOn(updates.checkin_date)) throw photoTooOld();
+  // A check-in with a photo cannot be moved to an EARLIER date outside the
+  // photo window (that would let old dates pile up photos). Keeping or moving
+  // it to a later date is fine, even if both dates are outside the window.
+  const current = req.resource.checkin_date;
+  const target = updates.checkin_date;
+  if (target && req.resource.photo_mime && target < current && !photoAllowedOn(target)) throw photoMoveTooOld(current);
   // Column names come from the strict schema's fixed key set, never from raw input.
   const columns = Object.keys(updates);
   await uniqueDay(

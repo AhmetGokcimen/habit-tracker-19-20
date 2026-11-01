@@ -263,6 +263,20 @@ describe('a lockout by strangers does not lock out the owner', () => {
     assert.equal(await isTrustedLoginIp(fakeReq(12)), true);
   });
 
+  test('a request without a known client address is never recorded as trusted and gets no exemption', async () => {
+    const id = await createUser('no_addr');
+    const noAddr = { headers: {}, socket: { remoteAddress: '' }, body: { username: 'no_addr' } };
+    assert.equal(clientIp(noAddr), 'unknown');
+    await rememberLoginIp(id, noAddr);
+    assert.equal((await trustedRows(id)).length, 0);
+    // Even with the owner's real network trusted, an unknown address stays limited.
+    await rememberLoginIp(id, { ...noAddr, socket: { remoteAddress: '203.0.113.50' } });
+    assert.equal(await isTrustedLoginIp(noAddr), false);
+    const results = [];
+    for (let i = 0; i < 51; i++) results.push(await hitLimiter(limiters.loginAccountDaily, { ip: '', username: 'no_addr' }));
+    assert.equal(results.at(-1), 429);
+  });
+
   test('if recording the trusted network fails, a correct login still succeeds and nothing identifying is logged', async (t) => {
     await createUser('rec_fail');
     await db.run(

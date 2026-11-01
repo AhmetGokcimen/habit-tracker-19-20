@@ -113,12 +113,15 @@ const TRUSTED_IP_KEY = Buffer.from(
 );
 // HMAC of the same bucket the limiters use (IPv4 address or IPv6 /64).
 const ipHash = (req) => crypto.createHmac('sha256', TRUSTED_IP_KEY).update(byIp(req)).digest('hex');
+// clientIp() returns 'unknown' when it cannot read an address. That is not a
+// network: it is shared by every such request, so it is never trusted.
+const hasKnownIp = (req) => byIp(req) !== 'unknown';
 
 // True if this network signed in to the named account successfully in the
 // last 30 days. Any error means "not trusted": the request stays limited.
 async function isTrustedLoginIp(req) {
   const name = loginName(req);
-  if (name === null) return false;
+  if (name === null || !hasKnownIp(req)) return false;
   try {
     const row = await db.get(
       `SELECT 1 FROM login_trusted_ips t JOIN users u ON u.id = t.user_id
@@ -134,9 +137,11 @@ async function isTrustedLoginIp(req) {
 
 // Called only after a correct password. One atomic batch: drop this user's
 // expired entries, add or refresh this network, keep only the 10 most recent.
-function rememberLoginIp(userId, req) {
+// Does nothing for a request without a known client address.
+async function rememberLoginIp(userId, req) {
+  if (!hasKnownIp(req)) return;
   const now = Date.now();
-  return db.batch([
+  await db.batch([
     ['DELETE FROM login_trusted_ips WHERE user_id = ? AND last_used <= ?', [userId, now - TRUSTED_IP_MAX_AGE_MS]],
     [
       `INSERT INTO login_trusted_ips (user_id, ip_hash, last_used) VALUES (?, ?, ?)
