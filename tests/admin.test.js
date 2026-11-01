@@ -30,6 +30,7 @@ describe('F2 — admin endpoints are admin-only', () => {
     const calls = [
       (a) => a.get('/api/admin/users'),
       (a) => a.get('/api/admin/stats'),
+      (a) => a.get('/api/admin/photo-storage'),
       (a) => a.get('/api/admin/audit-log'),
       (a) => a.patch(`/api/admin/users/${bobId}/role`).send({ role: 'admin' }),
       (a) => a.patch(`/api/admin/users/${rootId}/role`).send({ role: 'user' }),

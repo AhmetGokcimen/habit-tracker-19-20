@@ -23,6 +23,81 @@ function ledger(totals) {
   return el('dl', { class: 'ledger' }, rows.map(([label, value]) => el('div', {}, el('dt', { text: label }), el('dd', { text: String(value) }))));
 }
 
+const MB = 1024 * 1024;
+const formatMB = (bytes) => `${(bytes / MB).toFixed(bytes >= 100 * MB ? 0 : 1)} MB`;
+// At or above this share of the cap the section asks the admin to act.
+const STORAGE_WARN_PERCENT = 90;
+
+// Service-wide proof-photo storage and the accounts that store the most.
+function photoStorage({ storage, top_users: topUsers }) {
+  const pct = storage.used_percent;
+  const full = pct >= 100;
+  const bar = el(
+    'span',
+    {
+      class: 'hbar',
+      attrs: {
+        role: 'progressbar',
+        'aria-label': 'Photo storage used',
+        'aria-valuemin': '0',
+        'aria-valuemax': '100',
+        'aria-valuenow': String(Math.min(pct, 100)),
+      },
+    },
+    el('span', { class: 'hbar-fill', vars: { '--w': `${Math.min(pct, 100)}%` } }),
+  );
+  const summary = el('p', {
+    class: 'mono',
+    text: `${formatMB(storage.used_bytes)} of ${formatMB(storage.cap_bytes)} used (${pct}%) · ${formatMB(storage.per_user_quota_bytes)} per user`,
+  });
+  const warning =
+    pct >= STORAGE_WARN_PERCENT
+      ? el('p', {
+          class: 'form-error',
+          attrs: { role: 'status' },
+          text: full
+            ? 'Storage is full: new proof photos are refused for everyone. Check the accounts below and delete any that abuse it.'
+            : 'Storage is almost full. Check the accounts below for abuse before new photos are refused for everyone.',
+        })
+      : null;
+
+  const table = topUsers.length
+    ? el(
+        'div',
+        { class: 'table-wrap' },
+        el(
+          'table',
+          { class: 'table' },
+          el('thead', {}, el('tr', {}, ['User', 'Photos', 'Stored', 'Of quota'].map((h) => el('th', { text: h, attrs: { scope: 'col' } })))),
+          el(
+            'tbody',
+            {},
+            topUsers.map((u) =>
+              el(
+                'tr',
+                {},
+                el('td', { text: `@${u.username}` }),
+                el('td', { class: 'mono', text: String(u.photo_count) }),
+                el('td', { class: 'mono', text: formatMB(u.photo_bytes) }),
+                el('td', { class: 'mono', text: `${u.quota_percent}%` }),
+              ),
+            ),
+          ),
+        ),
+      )
+    : el('p', { class: 'muted', text: 'No proof photos stored yet.' });
+
+  return el(
+    'section',
+    { class: 'section' },
+    el('div', { class: 'section-head' }, el('h2', { text: 'Photo storage' }), el('span', { class: 'mono muted', text: `top ${topUsers.length} accounts` })),
+    summary,
+    bar,
+    warning,
+    table,
+  );
+}
+
 function roleSelect(user) {
   const select = el(
     'select',
@@ -209,8 +284,9 @@ function challengeList(challenges) {
 }
 
 async function load() {
-  const [stats, { users }, { entries }, { challenges }] = await Promise.all([
+  const [stats, photos, { users }, { entries }, { challenges }] = await Promise.all([
     api.get('/api/admin/stats'),
+    api.get('/api/admin/photo-storage'),
     api.get('/api/admin/users'),
     api.get('/api/admin/audit-log'),
     api.get('/api/challenges'),
@@ -223,6 +299,7 @@ async function load() {
       el('div', {}, el('p', { class: 'eyebrow', text: 'Administration' }), el('h1', { text: 'Admin' }), el('p', { class: 'lede', text: 'Manage accounts and review every admin action. Changes take effect immediately.' })),
     ),
     ledger(stats.totals),
+    photoStorage(photos),
     el('section', { class: 'section' }, el('div', { class: 'section-head' }, el('h2', { text: 'Users' }), el('span', { class: 'mono muted', text: `${users.length} accounts` })), usersTable(users)),
     el(
       'section',
