@@ -271,7 +271,7 @@ function checkinForm() {
     el(
       'div',
       { class: 'field', dataset: { field: 'photo' } },
-      el('label', { class: 'file-drop', attrs: { for: 'ci-photo' } }, el('span', { class: 'label', text: 'Proof photo (optional)' }), el('span', { class: 'hint', text: 'JPEG, PNG or WebP, up to 1 MB. Only you and admins can see it.' }), photo),
+      el('label', { class: 'file-drop', attrs: { for: 'ci-photo' } }, el('span', { class: 'label', text: 'Proof photo (optional)' }), el('span', { class: 'hint', text: 'JPEG, PNG or WebP, up to 1 MB, for the last 7 days. Only you and admins can see it.' }), photo),
     ),
     submit,
   );
@@ -287,15 +287,20 @@ function checkinForm() {
       showFormErrors(form, new ApiError(400, { error: 'Choose a JPEG, PNG or WebP image of 1 MB or less.' }));
       return;
     }
-    const data = new FormData();
-    data.append('checkin_date', date.value);
-    data.append('note', note.value.trim());
-    if (measured) data.append('amount', amount.value);
-    if (file) data.append('photo', file);
-
     await withBusy(submit, async () => {
       try {
-        await api.upload('POST', `/api/habits/${habit.id}/checkins`, data);
+        const url = `/api/habits/${habit.id}/checkins`;
+        if (file) {
+          // Multipart only when there is a photo (uploads have their own limit).
+          const data = new FormData();
+          data.append('checkin_date', date.value);
+          data.append('note', note.value.trim());
+          if (measured) data.append('amount', amount.value);
+          data.append('photo', file);
+          await api.upload('POST', url, data);
+        } else {
+          await api.post(url, { checkin_date: date.value, note: note.value.trim(), ...(measured && { amount: Number(amount.value) }) });
+        }
         toast(`Checked in for ${formatDate(date.value)}`);
         await refresh();
       } catch (err) {

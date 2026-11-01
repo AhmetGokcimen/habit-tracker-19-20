@@ -61,4 +61,8 @@ module.exports = Object.freeze({
   database: Object.freeze(databaseConfig()),
   publicDir: path.join(ROOT, 'public'),
   maxUploadBytes: 1024 * 1024,
+  // Total proof-photo bytes one user may store (all check-ins together).
+  photoQuotaBytes: intFromEnv('PHOTO_QUOTA_MB', 10, 1, 1024) * 1024 * 1024,
+  // Total proof-photo bytes of ALL users together; new photos are refused above it.
+  photoTotalCapBytes: intFromEnv('PHOTO_TOTAL_CAP_MB', 1024, 1, 1024 * 1024) * 1024 * 1024,
 });

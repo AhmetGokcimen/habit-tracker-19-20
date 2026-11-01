@@ -177,7 +177,7 @@ describe('F8 — photo upload', () => {
 
   test('photo is served with a fixed type, nosniff, inline disposition and a server-made filename', async () => {
     const traversal = await alice.post(`/api/habits/${alicePrivateHabit.id}/checkins`)
-      .field('checkin_date', daysAgo(40))
+      .field('checkin_date', daysAgo(2)) // photos are accepted only for recent days
       .attach('photo', JPEG, { filename: '../../../etc/passwd.jpg', contentType: 'text/html' });
     assert.equal(traversal.status, 201);
 
