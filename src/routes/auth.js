@@ -5,7 +5,7 @@ const config = require('../config');
 const db = require('../db');
 const schemas = require('../validators/schemas');
 const { validate } = require('../middleware/validate');
-const { limiters } = require('../middleware/rateLimit');
+const { limiters, rememberLoginIp } = require('../middleware/rateLimit');
 const { SESSION_COOKIE, requireAuth } = require('../middleware/authenticate');
 const { hashPassword, verifyPassword, createSession, revokeSession } = require('../services/authService');
 const { auditStatement } = require('../services/auditLog');
@@ -28,7 +28,7 @@ async function startSession(res, user) {
 
 const publicUser = (u) => ({ id: u.id, username: u.username, role: u.role });
 
-router.post('/register', limiters.register, validate({ body: schemas.register }), async (req, res) => {
+router.post('/register', limiters.register, limiters.registerDaily, validate({ body: schemas.register }), async (req, res) => {
   const { username, email, password } = req.valid.body;
   // Only the username is checked: usernames are public anyway, while emails are
   // private and must not be confirmable through this endpoint.
@@ -70,6 +70,14 @@ router.post(
     const ok = await verifyPassword(password, user?.password_hash);
     if (!user || !ok) throw unauthorized('Invalid username or password');
 
+    // Only a correct password (that passed every limiter) makes a network trusted.
+    // This is a convenience: if it fails, the login still succeeds. The log
+    // line carries only the error code, never the address or its hash.
+    try {
+      await rememberLoginIp(user.id, req);
+    } catch (err) {
+      console.error('Could not record trusted login network:', err.code || err.name);
+    }
     await startSession(res, user);
     // Admin sign-ins are audited, so use of an admin account is always traceable.
     if (user.role === 'admin') {

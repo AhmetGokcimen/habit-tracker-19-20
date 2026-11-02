@@ -285,7 +285,7 @@ export function toast(message, { error = false, action = null } = {}) {
 
 export function errorMessage(err) {
   if (err instanceof ApiError) {
-    if (err.status === 429) return 'Too many attempts. Wait a few minutes and try again.';
+    if (err.status === 429) return err.code ? err.message : 'Too many attempts. Wait a few minutes and try again.';
     if (err.status === 403) return 'You don’t have permission to do that.';
     return err.message;
   }

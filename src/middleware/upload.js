@@ -31,6 +31,14 @@ const SIGNATURES = [
 
 const EXTENSIONS = Object.fromEntries(SIGNATURES.map((s) => [s.mime, s.ext]));
 
+// Proof photos only for recent days (one extra day of slack in UTC for time
+// zones behind it), so old dates cannot be used to pile up stored photos.
+const PHOTO_MAX_AGE_DAYS = 7;
+function photoAllowedOn(isoDate, now = Date.now()) {
+  const earliest = new Date(now - (PHOTO_MAX_AGE_DAYS + 1) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return isoDate >= earliest;
+}
+
 // Returns { mime, ext } for a supported image, or null.
 function detectImageType(buffer) {
   const match = SIGNATURES.find((s) => s.test(buffer));
@@ -65,4 +73,4 @@ function photoUpload(req, res, next) {
   });
 }
 
-module.exports = { photoUpload, detectImageType, EXTENSIONS };
+module.exports = { photoUpload, detectImageType, EXTENSIONS, PHOTO_MAX_AGE_DAYS, photoAllowedOn };

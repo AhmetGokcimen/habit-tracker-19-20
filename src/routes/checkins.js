@@ -7,16 +7,17 @@
 // One check-in per habit per day, enforced by UNIQUE(habit_id, checkin_date).
 
 const express = require('express');
+const config = require('../config');
 const db = require('../db');
 const schemas = require('../validators/schemas');
 const { validate } = require('../middleware/validate');
 const { requireAuth } = require('../middleware/authenticate');
 const { authorize } = require('../middleware/authorize');
-const { photoUpload, EXTENSIONS } = require('../middleware/upload');
+const { photoUpload, EXTENSIONS, PHOTO_MAX_AGE_DAYS, photoAllowedOn } = require('../middleware/upload');
 const { moderationAudit } = require('../services/auditLog');
 const schedule = require('../services/schedule');
 const { freezesLeft } = require('../services/freezes');
-const { conflict, notFound } = require('../utils/httpError');
+const { HttpError, badRequest, conflict, notFound } = require('../utils/httpError');
 const { limiters } = require('../middleware/rateLimit');
 
 const SELECT_CHECKIN = `SELECT id, habit_id, user_id, checkin_date, note, created_at, amount,
@@ -48,6 +49,52 @@ async function uniqueDay(promise) {
   }
 }
 
+// ---- proof-photo limits (H-2) ------------------------------------------------
+
+// Uploads are rate limited before their body is read. Every multipart request
+// counts (the frontend sends JSON when there is no photo).
+const uploadLimit = (req, res, next) => (req.is('multipart/form-data') ? limiters.photoUploads(req, res, next) : next());
+
+const MB = 1024 * 1024;
+const photoTooOld = () => badRequest(`Proof photos can be added only for the last ${PHOTO_MAX_AGE_DAYS} days`);
+const photoMoveTooOld = (current) =>
+  badRequest(
+    `This check-in has a proof photo, so it cannot be moved to an earlier date outside the last ${PHOTO_MAX_AGE_DAYS} days. ` +
+      `Choose ${current} or a later date, or remove the photo first.`,
+  );
+const photoQuotaFull = () =>
+  conflict(`Your photo storage is full (${config.photoQuotaBytes / MB} MB). Remove an old proof photo first.`);
+// 507 Insufficient Storage: the service-wide cap, not something the user did.
+const photoStorageFull = () =>
+  new HttpError(507, 'Photo uploads are paused because storage is full. Nothing was saved — you can check in without a photo.');
+
+// Both limits are checked INSIDE the write statement (SQLite runs it as one
+// atomic step), so parallel uploads cannot exceed either one together.
+// The global total comes from the one-row photo_storage counter (no scan).
+const PHOTO_FITS_ON_INSERT = `
+  (SELECT COALESCE(SUM(length(photo_data)), 0) FROM checkins WHERE user_id = ?2) + length(?5) <= ?8
+  AND (SELECT bytes FROM photo_storage WHERE id = 1) + length(?5) <= ?9`;
+// On replace, the check-in's own current photo is not counted.
+const PHOTO_FITS_ON_REPLACE = `
+  (SELECT COALESCE(SUM(length(photo_data)), 0) FROM checkins WHERE user_id = ?4 AND id <> ?3) + length(?1) <= ?5
+  AND (SELECT bytes FROM photo_storage WHERE id = 1) - COALESCE(length(photo_data), 0) + length(?1) <= ?6`;
+
+// After a refused write: which limit was it? (Only used for the message.)
+// A check-in deleted in the meantime (parallel request) is reported as 404.
+async function photoRefusal(size, replacingCheckinId = null) {
+  const [{ bytes } = {}, current] = await Promise.all([
+    db.get('SELECT bytes FROM photo_storage WHERE id = 1'),
+    replacingCheckinId === null
+      ? { n: 0 }
+      : db.get('SELECT COALESCE(length(photo_data), 0) AS n FROM checkins WHERE id = ?', [replacingCheckinId]),
+  ]);
+  if (!current) return notFound('This check-in no longer exists');
+  return bytes !== undefined && bytes - current.n + size <= config.photoTotalCapBytes ? photoQuotaFull() : photoStorageFull();
+}
+
+// The date is checked before an upload body is read.
+const recentCheckinOnly = (req, _res, next) => next(photoAllowedOn(req.resource.checkin_date) ? undefined : photoTooOld());
+
 // ---- /api/habits/:id/checkins -------------------------------------------
 
 const habitCheckins = express.Router({ mergeParams: true });
@@ -77,18 +124,24 @@ habitCheckins.get('/', authorize('habit', 'listCheckins'), async (req, res) => {
 habitCheckins.post(
   '/',
   authorize('habit', 'addCheckin'),
+  uploadLimit,
   photoUpload,
   validate({ body: schemas.checkinCreate }),
   async (req, res) => {
     const { checkin_date, note } = req.valid.body;
+    if (req.photo && !photoAllowedOn(checkin_date)) throw photoTooOld();
     const amount = req.valid.body.amount ?? req.resource.target_count;
-    const { lastInsertRowid } = await uniqueDay(
+    const photo = req.photo?.data ?? null;
+    const { changes, lastInsertRowid } = await uniqueDay(
       db.run(
         `INSERT INTO checkins (habit_id, user_id, checkin_date, note, photo_data, photo_mime, amount)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        [req.resource.id, req.user.id, checkin_date, note, req.photo?.data ?? null, req.photo?.mime ?? null, amount],
+         SELECT ?1, ?2, ?3, ?4, ?5, ?6, ?7
+          WHERE ?5 IS NULL OR (${PHOTO_FITS_ON_INSERT})`,
+        [req.resource.id, req.user.id, checkin_date, note, photo, req.photo?.mime ?? null, amount,
+          config.photoQuotaBytes, config.photoTotalCapBytes],
       ),
     );
+    if (changes === 0) throw await photoRefusal(photo.length);
     res.status(201).json({ checkin: serializeCheckin(await findCheckin(lastInsertRowid)) });
   },
 );
@@ -148,6 +201,12 @@ checkins.get('/:id', authorize('checkin', 'read'), async (req, res) => {
 
 checkins.patch('/:id', authorize('checkin', 'update'), validate({ body: schemas.checkinUpdate }), async (req, res) => {
   const updates = req.valid.body;
+  // A check-in with a photo cannot be moved to an EARLIER date outside the
+  // photo window (that would let old dates pile up photos). Keeping or moving
+  // it to a later date is fine, even if both dates are outside the window.
+  const current = req.resource.checkin_date;
+  const target = updates.checkin_date;
+  if (target && req.resource.photo_mime && target < current && !photoAllowedOn(target)) throw photoMoveTooOld(current);
   // Column names come from the strict schema's fixed key set, never from raw input.
   const columns = Object.keys(updates);
   await uniqueDay(
@@ -168,14 +227,14 @@ checkins.delete('/:id', authorize('checkin', 'delete'), async (req, res) => {
   res.status(204).end();
 });
 
-// Replace or add the proof photo.
-checkins.put('/:id/photo', authorize('checkin', 'update'), photoUpload, async (req, res) => {
+// Replace or add the proof photo (recent check-ins only, within both limits).
+checkins.put('/:id/photo', authorize('checkin', 'update'), recentCheckinOnly, uploadLimit, photoUpload, async (req, res) => {
   if (!req.photo) return res.status(400).json({ error: 'A photo file is required (field "photo")' });
-  await db.run('UPDATE checkins SET photo_data = ?, photo_mime = ? WHERE id = ?', [
-    req.photo.data,
-    req.photo.mime,
-    req.resource.id,
-  ]);
+  const { changes } = await db.run(
+    `UPDATE checkins SET photo_data = ?1, photo_mime = ?2 WHERE id = ?3 AND ${PHOTO_FITS_ON_REPLACE}`,
+    [req.photo.data, req.photo.mime, req.resource.id, req.user.id, config.photoQuotaBytes, config.photoTotalCapBytes],
+  );
+  if (changes === 0) throw await photoRefusal(req.photo.data.length, req.resource.id);
   res.json({ checkin: serializeCheckin(await findCheckin(req.resource.id)) });
 });
 

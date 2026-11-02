@@ -143,7 +143,7 @@ describe('F7 — search and filter', () => {
   });
 
   test('LIKE wildcards are matched literally and bad query params are rejected', async () => {
-    const percent = await alice.get(`/api/habits?q=${encodeURIComponent('%')}`);
+    const percent = await alice.get(`/api/habits?q=${encodeURIComponent('0%')}`); // 2 characters minimum
     assert.deepEqual(percent.body.habits.map((h) => h.title), ['100% focus']);
 
     assert.equal((await alice.get('/api/habits?q=a&q=b')).status, 400);

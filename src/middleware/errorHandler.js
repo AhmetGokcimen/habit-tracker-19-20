@@ -5,14 +5,21 @@
 
 const multer = require('multer');
 const config = require('../config');
+const { HttpError } = require('../utils/httpError');
 
 function notFoundHandler(_req, res) {
   res.status(404).json({ error: 'Not found' });
 }
 
+// A message reaches the client for exposed 4xx errors, and for 5xx errors
+// only when the app raised them deliberately with its own HttpError (e.g. 507
+// "storage is full"). Any other 5xx stays a generic 500.
+const isSafeToShow = (err) =>
+  err.expose && ((err.status >= 400 && err.status < 500) || (err instanceof HttpError && err.status >= 500 && err.status < 600));
+
 // Express identifies error handlers by their 4-argument signature.
 function errorHandler(err, _req, res, _next) {
-  if (err.expose && err.status >= 400 && err.status < 500) {
+  if (isSafeToShow(err)) {
     const body = { error: err.message };
     if (err.details) body.details = err.details;
     return res.status(err.status).json(body);

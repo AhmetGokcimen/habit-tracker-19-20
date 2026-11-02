@@ -7,6 +7,8 @@ export class ApiError extends Error {
     super(body?.error || `Request failed (${status})`);
     this.status = status;
     this.details = Array.isArray(body?.details) ? body.details : [];
+    // Set by the server when a 429 has its own explanation (e.g. a daily limit).
+    this.code = typeof body?.code === 'string' ? body.code : null;
   }
 }
 

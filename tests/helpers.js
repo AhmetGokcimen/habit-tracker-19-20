@@ -24,6 +24,8 @@ for (const name of fs.readdirSync(dbDir)) {
 const dbFile = path.join(dbDir, `${process.pid}-${Date.now()}.db`);
 
 process.env.NODE_ENV = 'test';
+// Limits read by config (see ./env.js); a file's own overrides, if any, are kept.
+require('./env').testEnv();
 process.env.JWT_SECRET = crypto.randomBytes(48).toString('hex');
 process.env.BCRYPT_ROUNDS = '4';
 process.env.DATABASE_URL = `file:${dbFile.split(path.sep).join('/')}`;

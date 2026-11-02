@@ -34,6 +34,18 @@ CREATE TABLE IF NOT EXISTS rate_limit_windows (
   prev_hits    INTEGER NOT NULL DEFAULT 0
 );
 
+-- Networks an account signed in from successfully, as an HMAC of the client
+-- IP bucket (IPv4 address or IPv6 /64), never the address itself. Over the
+-- per-account daily failed-login limit, logins from these networks are still
+-- let through, so strangers cannot lock out the owner. At most 10 per user,
+-- kept for 30 days after last use (src/middleware/rateLimit.js).
+CREATE TABLE IF NOT EXISTS login_trusted_ips (
+  user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  ip_hash   TEXT    NOT NULL CHECK (length(ip_hash) = 64),
+  last_used INTEGER NOT NULL,
+  PRIMARY KEY (user_id, ip_hash)
+);
+
 CREATE TABLE IF NOT EXISTS habits (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -83,6 +95,7 @@ CREATE TABLE IF NOT EXISTS checkins (
   UNIQUE (habit_id, checkin_date)
 );
 CREATE INDEX IF NOT EXISTS idx_checkins_habit ON checkins(habit_id);
+CREATE INDEX IF NOT EXISTS idx_checkins_user ON checkins(user_id);
 
 -- A check-in always belongs to the owner of its habit. Enforced by the
 -- database too, so even an application bug cannot attach a check-in to
@@ -100,6 +113,44 @@ WHEN NEW.habit_id IS NOT OLD.habit_id OR NEW.user_id IS NOT OLD.user_id
 BEGIN
   SELECT RAISE(ABORT, 'checkin owner and habit are immutable');
 END;
+
+-- Total bytes of all proof photos, as ONE counter row kept up to date by the
+-- triggers below, so the global storage cap is checked without scanning
+-- checkins (routes/checkins.js). MAX(0, ...) instead of a CHECK: a drifted
+-- counter must never make deleting a photo fail.
+CREATE TABLE IF NOT EXISTS photo_storage (
+  id    INTEGER PRIMARY KEY CHECK (id = 1),
+  bytes INTEGER NOT NULL
+);
+
+CREATE TRIGGER IF NOT EXISTS photo_storage_on_insert
+AFTER INSERT ON checkins
+WHEN NEW.photo_data IS NOT NULL
+BEGIN
+  UPDATE photo_storage SET bytes = bytes + length(NEW.photo_data) WHERE id = 1;
+END;
+
+CREATE TRIGGER IF NOT EXISTS photo_storage_on_update
+AFTER UPDATE OF photo_data ON checkins
+BEGIN
+  UPDATE photo_storage
+     SET bytes = MAX(0, bytes + COALESCE(length(NEW.photo_data), 0) - COALESCE(length(OLD.photo_data), 0))
+   WHERE id = 1;
+END;
+
+CREATE TRIGGER IF NOT EXISTS photo_storage_on_delete
+AFTER DELETE ON checkins
+WHEN OLD.photo_data IS NOT NULL
+BEGIN
+  UPDATE photo_storage SET bytes = MAX(0, bytes - length(OLD.photo_data)) WHERE id = 1;
+END;
+
+-- Initialised once from the existing data. The triggers exist first, so a
+-- photo written in between is either counted by them or by this sum, never
+-- lost. The sum only runs while the row is missing (not on every start).
+INSERT OR IGNORE INTO photo_storage (id, bytes)
+SELECT 1, (SELECT COALESCE(SUM(length(photo_data)), 0) FROM checkins)
+ WHERE NOT EXISTS (SELECT 1 FROM photo_storage WHERE id = 1);
 
 -- Streak freezes (F-freeze): a missed day that keeps the streak alive.
 -- The monthly allowance is enforced atomically by the INSERT in routes/freezes.js.

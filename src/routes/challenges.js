@@ -23,9 +23,9 @@ const schemas = require('../validators/schemas');
 const { validate } = require('../middleware/validate');
 const { requireAuth } = require('../middleware/authenticate');
 const { authorize } = require('../middleware/authorize');
+const { limiters } = require('../middleware/rateLimit');
 const { badRequest, conflict } = require('../utils/httpError');
 
-const LEADERBOARD_SIZE = 50;
 const todayIso = () => new Date().toISOString().slice(0, 10);
 
 const router = express.Router();
@@ -60,7 +60,8 @@ router.get('/', async (req, res) => {
   res.json({ challenges: rows.map(serializeChallenge) });
 });
 
-router.get('/:id', authorize('challenge', 'read'), async (req, res) => {
+router.get('/:id', limiters.listReads, authorize('challenge', 'read'), validate({ query: schemas.leaderboardQuery }), async (req, res) => {
+  const { limit } = req.valid.query;
   const ch = await db.get(`${SELECT_CHALLENGE} WHERE ch.id = ?2`, [req.user.id, req.resource.id]);
   // Days completed inside the challenge window (up to today), per member.
   const board = await db.all(
@@ -82,7 +83,8 @@ router.get('/:id', authorize('challenge', 'read'), async (req, res) => {
   });
   res.json({
     challenge: serializeChallenge(ch),
-    leaderboard: ranked.slice(0, LEADERBOARD_SIZE),
+    leaderboard: ranked.slice(0, limit),
+    limit,
     me: ranked.find((r) => r.is_me) ?? null,
   });
 });
