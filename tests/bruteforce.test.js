@@ -362,16 +362,27 @@ describe('accounts created per IP per day', () => {
   });
 });
 
-describe('registration does not reveal which emails have accounts', () => {
-  test('an email that is already in use registers normally; only a taken username is reported', async () => {
+describe('one account per email', () => {
+  const register = (body) => wrap(request(app)).post('/api/auth/register').send(body);
+
+  test('a second account with the same email (any case) is refused with the same message as a taken username', async () => {
     await createUser('existing_user'); // email existing_user@example.test
-    const register = (body) => wrap(request(app)).post('/api/auth/register').send(body);
+    const before = (await db.get('SELECT COUNT(*) AS n FROM users')).n;
 
-    const sameEmail = await register({ username: 'fresh_user', email: 'existing_user@example.test', password: 'Secret123x' });
-    assert.equal(sameEmail.status, 201);
-
+    const sameEmail = await register({ username: 'fresh_user', email: ' Existing_User@Example.TEST ', password: 'Secret123x' });
     const sameName = await register({ username: 'existing_user', email: 'new@example.test', password: 'Secret123x' });
+    assert.equal(sameEmail.status, 409);
     assert.equal(sameName.status, 409);
-    assert.doesNotMatch(sameName.body.error, /email/i);
+    // Identical answers: the response does not say whether the name or the email clashed.
+    assert.deepEqual(sameEmail.body, sameName.body);
+    assert.equal((await db.get('SELECT COUNT(*) AS n FROM users')).n, before);
+  });
+
+  test('the database refuses a duplicate email too, whatever the case', async () => {
+    await createUser('db_unique');
+    await assert.rejects(
+      db.run("INSERT INTO users (username, email, password_hash) VALUES ('db_unique2', 'DB_UNIQUE@example.test', 'x')"),
+      /UNIQUE/,
+    );
   });
 });

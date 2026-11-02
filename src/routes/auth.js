@@ -27,13 +27,15 @@ async function startSession(res, user) {
 }
 
 const publicUser = (u) => ({ id: u.id, username: u.username, role: u.role });
+const ALREADY_REGISTERED = 'That username or email is already registered';
 
 router.post('/register', limiters.register, limiters.registerDaily, validate({ body: schemas.register }), async (req, res) => {
   const { username, email, password } = req.valid.body;
-  // Only the username is checked: usernames are public anyway, while emails are
-  // private and must not be confirmable through this endpoint.
-  const taken = await db.get('SELECT 1 FROM users WHERE username = ?', [username]);
-  if (taken) throw conflict('That username is taken');
+  // Usernames and emails are both unique. One message for either clash, so a
+  // single response does not say which one is registered; the register rate
+  // limits keep probing for addresses slow.
+  const taken = await db.get('SELECT 1 FROM users WHERE username = ? OR email = ?', [username, email]);
+  if (taken) throw conflict(ALREADY_REGISTERED);
 
   const hash = await hashPassword(password);
   let lastInsertRowid;
@@ -44,8 +46,8 @@ router.post('/register', limiters.register, limiters.registerDaily, validate({ b
       [username, email, hash],
     ));
   } catch (err) {
-    // Two concurrent registrations for the same name: the UNIQUE constraint decides.
-    if (/UNIQUE/.test(err.message)) throw conflict('That username is taken');
+    // Two concurrent registrations for the same name or email: the UNIQUE constraints decide.
+    if (/UNIQUE/.test(err.message)) throw conflict(ALREADY_REGISTERED);
     throw err;
   }
 

@@ -40,6 +40,19 @@ async function migrate(client) {
     }
   }
   if (AFTER_COLUMNS.trim()) await client.executeMultiple(AFTER_COLUMNS);
+  await uniqueEmails(client);
+}
+
+// Emails became unique after the first release. A database that already holds
+// two accounts with one email cannot get the index; it keeps running (the
+// register route still refuses new duplicates) and logs which step is missing.
+async function uniqueEmails(client) {
+  try {
+    await client.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)');
+  } catch (err) {
+    if (!/UNIQUE/i.test(err.message)) throw err;
+    console.error('idx_users_email not created: some accounts share an email. Resolve them, then restart.');
+  }
 }
 
 module.exports = { migrate, ADDED_COLUMNS };

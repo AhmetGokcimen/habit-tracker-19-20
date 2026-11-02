@@ -53,3 +53,18 @@ test('migrate() upgrades a first-release database to the current schema', async 
   fresh.close();
   old.close();
 });
+
+test('a database whose accounts already share an email still starts; the email index is skipped', async (t) => {
+  const current = fs.readFileSync(path.join(__dirname, '../src/db/schema.sql'), 'utf8');
+  const client = tempClient('dup-email');
+  await client.executeMultiple(current);
+  await client.execute("INSERT INTO users (username, email, password_hash) VALUES ('a', 'same@example.test', 'x'), ('b', 'SAME@example.test', 'x')");
+  const logged = t.mock.method(console, 'error', () => {});
+
+  await migrate(client);
+
+  const idx = await client.execute("SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'idx_users_email'");
+  assert.equal(idx.rows.length, 0);
+  assert.equal(logged.mock.callCount(), 1);
+  client.close();
+});

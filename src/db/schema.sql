@@ -6,8 +6,8 @@
 CREATE TABLE IF NOT EXISTS users (
   id            INTEGER PRIMARY KEY AUTOINCREMENT,
   username      TEXT    NOT NULL UNIQUE COLLATE NOCASE,
-  -- Not unique on purpose: login is by username, and a unique email would let
-  -- the register endpoint reveal whether an address has an account.
+  -- Unique (case-insensitive) through idx_users_email, created in
+  -- db/migrations.js so a database that already holds duplicates still starts.
   email         TEXT    NOT NULL COLLATE NOCASE,
   password_hash TEXT    NOT NULL,
   role          TEXT    NOT NULL DEFAULT 'user' CHECK (role IN ('user', 'admin')),
